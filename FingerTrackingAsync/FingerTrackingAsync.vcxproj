@@ -160,12 +160,14 @@ xcopy "%NITE2_REDIST64%*" "$(OutDir)" /y /s /e /i /d</Command>
   <ItemGroup>
     <ClInclude Include="Application.h" />
     <ClInclude Include="KinectReader.h" />
+    <ClInclude Include="OpenCVThreadFactory.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="FingerTrackingAsync.cpp" />
     <ClCompile Include="KinectReader.cpp" />
+    <ClCompile Include="OpenCVThreadFactory.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

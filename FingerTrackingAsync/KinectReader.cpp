@@ -5,6 +5,7 @@ using namespace std;
 
 int KinectReader::initialize()
 {
+	
 	openni::Status statusNi = openni::STATUS_OK;
 	nite::Status statusNite = nite::STATUS_OK;
 	
@@ -83,7 +84,7 @@ cv::Mat KinectReader::getRGBFrame()
 
 bool KinectReader::isHandTracking()
 {
-	return false;
+	return numberOfHands > 0;
 }
 
 float KinectReader::getHandPosX()
