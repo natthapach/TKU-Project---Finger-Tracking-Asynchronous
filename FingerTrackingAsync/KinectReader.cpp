@@ -30,6 +30,8 @@ int KinectReader::initialize()
 	statusNi = device.open(openni::ANY_DEVICE);
 	if (statusNi != openni::STATUS_OK)
 		return 1;
+	
+	
 
 	// open depth stream
 	statusNi = depthStream.create(device, openni::SENSOR_DEPTH);
@@ -53,6 +55,8 @@ int KinectReader::initialize()
 	if (statusNi != openni::STATUS_OK)
 		return 1;
 
+	//statusNi = device.setImageRegistrationMode(openni::IMAGE_REGISTRATION_DEPTH_TO_COLOR);
+
 	return 0;
 }
 
@@ -71,6 +75,7 @@ cv::Mat KinectReader::getDepthFrame()
 	if (readDepthThread.joinable())
 		readDepthThread.join();
 	depthFrame = cv::Mat(480, 640, CV_8UC3, &img);
+	depthHandMask = cv::Mat(480, 640, CV_8UC1, &mask);
 	return depthFrame;
 }
 
@@ -80,6 +85,16 @@ cv::Mat KinectReader::getRGBFrame()
 		readRGBThread.join();
 	bool t = readRGBThread.joinable();
 	return colorFrame;
+}
+
+cv::Mat KinectReader::getDepthHandMask()
+{
+	return depthHandMask;
+}
+
+cv::Mat KinectReader::getRawDepthFrame()
+{
+	return cv::Mat(480, 640, CV_16UC1, &depthRaw);
 }
 
 bool KinectReader::isHandTracking()
@@ -158,6 +173,7 @@ void KinectReader::asyncReadDepthFrame()
 	calDepthHistogram(depthFrame, &numberOfPoints, &numberOfHandPoints);
 	modifyImage(depthFrame, numberOfPoints, numberOfHandPoints);
 	settingHandValue();
+
 	//imageFrame = cv::Mat(480, 640, CV_8UC3, &img);
 	//maskFrame = cv::Mat(480, 640, CV_8UC1, &mask);
 	
@@ -222,6 +238,9 @@ void KinectReader::modifyImage(openni::VideoFrameRef depthFrame, int numberOfPoi
 				else {
 					mask[y][x] = 0;
 				}
+			}
+			else {
+				mask[y][x] = 0;
 			}
 		}
 	}

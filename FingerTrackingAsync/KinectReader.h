@@ -13,6 +13,8 @@ public :
 	void readRGBFrame();
 	cv::Mat getDepthFrame();
 	cv::Mat getRGBFrame();
+	cv::Mat getDepthHandMask();
+	cv::Mat getRawDepthFrame();
 
 	bool isHandTracking();
 	float getHandPosX();
@@ -33,6 +35,7 @@ protected :
 	cv::Mat colorFrame = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat *colorFramePtr;
 	cv::Mat depthFrame;
+	cv::Mat depthHandMask;
 
 	float handPosX = 0;
 	float handPosY = 0;
