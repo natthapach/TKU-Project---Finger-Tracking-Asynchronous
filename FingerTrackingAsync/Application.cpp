@@ -35,22 +35,29 @@ void Application::start()
 
 			thread transformColorFrameT = thread(&Application::transformColorFrame, this);
 			transformColorFrameT.join(); // 13ms
-			thread buildSkinMaskT = thread(&Application::buildSkinMask, this);
+			//thread buildSkinMaskT = thread(&Application::buildSkinMask, this);
 			thread buildEdgeColorT = thread(&Application::buildEdgeColor, this);
 			
-			buildSkinMaskT.join(); // 18ms
-			int a = 0;
-			buildDepthHandMaskT.join();
-			int b = 0;
+			//buildSkinMaskT.join(); // 18ms
+			buildDepthHandMaskT.join();	// ~8 from start 
 
 			//thread combineSkinDepthT = thread(&Application::combineSkinHandMask, this);
 			//combineSkinDepthT.join(); // 7ms
 
 			thread buildHand3LayersT = thread(&Application::buildHand3Layers, this);
 			buildHand3LayersT.join(); //10
+			int a = 0;
+			thread evaluateHandLayer1T = thread(&Application::evaluateHandLayer1, this);
+			thread evaluateHandLater2T = thread(&Application::evaluateHandLayer2, this);
 
-			evaluateHandLayer1();
+			evaluateHandLater2T.join();
+			evaluateHandLayer1T.join();
 
+			evaluateLayer12();
+
+			/*evaluateHandLayer1();
+			evaluateHandLater2();*/
+			int b = 0;
 			buildEdgeColorT.join();
 
 			cv::imshow("Mask L1", handLayer1); // 14
@@ -204,9 +211,9 @@ void Application::buildHand3Layers()
 	int a = 0;
 }
 
-void Application::evaluateHandLayer1()
+void Application::evaluateHandLayer1() // ~66ms
 {
-	/*handLayer1Corners.clear();
+	handLayer1Corners.clear();
 	cv::Mat corner;
 	cv::cornerHarris(handLayer1, corner, 8, 5, 0.04, cv::BORDER_DEFAULT);
 	cv::normalize(corner, corner, 0, 255, cv::NORM_MINMAX, CV_32FC1, cv::Mat());
@@ -214,157 +221,185 @@ void Application::evaluateHandLayer1()
 	for (int j = 0; j < corner.rows; j++) {
 		float* cornerRow = corner.ptr<float>(j);
 		for (int i = 0; i < corner.cols; i++) {
-			if (cornerRow[i] > 200) {
+			if (cornerRow[i] > 180) {
 				if (handLayer1.ptr<uchar>(j)[i] > 0)
 					handLayer1Corners.push_back(cv::Point(i, j));
 			}
 		}
-	}*/
-
+	}
 	vector<vector<cv::Point>> contours;
-	
-	vector<cv::Vec4i> hierachy, hierachyI;
-	cv::findContours(handLayer1, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+	vector<cv::Vec4i> hierachy;
+	cv::findContours(handLayer1, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+	cornerGroup.clear();
+	for (int i = 0; i < handLayer1Corners.size(); i++) {
+		cv::Point corner_i = handLayer1Corners[i];
+		for (int j = 0; j < contours.size(); j++) {
+			if (cv::pointPolygonTest(contours[j], corner_i, false) > 0) {
+				if (cornerGroup.count(j) == 0) {
+					cornerGroup[j] = vector<cv::Point>();
+				}
+				cornerGroup[j].push_back(corner_i);
+			}
+		}
+	}
+	cv::cvtColor(handLayer1, handLayer1, cv::COLOR_GRAY2BGR);
+	for (int i = 0; i < handLayer1Corners.size(); i++) {
+		cv::circle(handLayer1, handLayer1Corners[i], 1, cv::Scalar(0, 0, 255), -1);
+	}
+}
+
+void Application::evaluateHandLayer2()	// 7ms
+{
+	vector<vector<cv::Point>> contours;
+	vector<cv::Vec4i> hierachy;
+	cv::findContours(handLayer2, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0,0));
 	vector<vector<cv::Point>> convexHull(contours.size());
 	vector<vector<int>> convexHullI(contours.size());
-	vector<vector<double>> hullD1(contours.size());
-	vector<vector<double>> contourD1(contours.size());
-	vector<vector<cv::Vec4i>> defects(contours.size());
+	double largestArea = 0;
+	int largestIndex = 0;
 	for (int i = 0; i < contours.size(); i++) {
 		cv::convexHull(contours[i], convexHull[i]);
 		cv::convexHull(contours[i], convexHullI[i]);
-		cv::convexityDefects(contours[i], convexHullI[i], defects[i]);
-	}
 
-	cv::cvtColor(handLayer1, handLayer1, cv::COLOR_GRAY2BGR);
-	/*for (int i = 0; i < contours.size(); i++) {
-		for (int j = 0; j < contours[i].size(); j++) {
-			cv::circle(handLayer1, contours[i][j], 1, cv::Scalar(0, 0, 255), -1);
-		}
-	}*/
-	//for (int i = 0; i < handLayer1Corners.size(); i++) {
-	//	cv::circle(handLayer1, handLayer1Corners[i], 2, cv::Scalar(0, 0, 255), -1);
-	//}
-	for (int i = 0; i < defects.size(); i++) {
-		for (int j = 0; j < defects[i].size(); j++) {
-			if (defects[i][j][3] > 10) {
-				cv::Point startPoint = contours[i][defects[i][j][0]];
-				cv::Point endPoint = contours[i][defects[i][j][1]];
-				cv::Point farPoint = contours[i][defects[i][j][2]];
-				
-				/*cv::line(handLayer1, farPoint, startPoint, cv::Scalar(0, 0, 255), 1);
-				cv::line(handLayer1, farPoint, endPoint, cv::Scalar(0, 0, 255), 1);
-				cv::circle(handLayer1, farPoint, 2, cv::Scalar(0, 0, 255), -1);*/
-			}
+		double a = cv::contourArea(contours[i]);
+		if (a > largestArea) {
+			largestArea = a;
+			largestIndex = i;
 		}
 	}
-	
-	for (int i = 0; i < convexHull.size(); i++) {
-		//cv::drawContours(handLayer1, convexHull, i, cv::Scalar(0, 0, 255), 1, 8, cv::Vec4i(), 0, cv::Point());
-		hullD1[i] = vector<double>(convexHull[i].size());
-		for (int j = 0; j < convexHull[i].size(); j++) {
-			cv::Point p0 = convexHull[i][j];
-			cv::Point p1 = convexHull[i][(j - 1) % convexHull[i].size()];
-			cv::Point p2 = convexHull[i][(j + 1) % convexHull[i].size()];
-			double m1 = ((double)(p0.y - p1.y)) / (p0.x - p1.x);
-			double m2 = ((double)(p2.y - p0.y)) / (p2.x - p0.x);
-			hullD1[i][j] = m2 / m1;
-			cv::line(handLayer1, p0, p1, cv::Scalar(0, 0, 255), 1);
-			/*if (hullD1[i][j] == 0) {
-				cv::circle(handLayer1, convexHull[i][j], 2, cv::Scalar(255, 0, 0), -1);
-			}*/
-			/*if (hullD1[i][j] < 0) {
-				cv::circle(handLayer1, convexHull[i][j], 2, cv::Scalar(255, 0, 0), -1);
-				
-			} else if (hullD1[i][j] > 0) {
-				cv::circle(handLayer1, convexHull[i][j], 2, cv::Scalar(0, 255, 0), -1);
-			}
-			else {
-				cv::circle(handLayer1, convexHull[i][j], 2, cv::Scalar(0, 255, 255), -1);
-			}*/
-			//cv::line(handLayer1, convexHull[i][j], convexHull[i][(j + 1) % convexHull[i].size()], cv::Scalar(255, 0, 0), 1);
-			//cv::circle(handLayer1, convexHull[i][j], 1, cv::Scalar(255, 0, 0), -1);
-		}
+	if (largestArea == 0)
+		return;
+
+	hullL2.clear();
+	for (int i = 0; i < convexHull[largestIndex].size(); i++) {
+		hullL2.push_back(convexHull[largestIndex][i]);
 	}
-	vector<vector<int>> contourDD(contours.size());
-	for (int i = 0; i < contours.size(); i++) {
-		contourD1[i] = vector<double>(contours[i].size());
-		for (int j = 0; j < contours[i].size(); j++) {
-			cv::Point p1 = contours[i][(j - 1) % contours[i].size()];
-			cv::Point p0 = contours[i][j];
-			cv::Point p2 = contours[i][(j + 1) % contours[i].size()];
-			
-			double dx1 = p0.x - p1.x;
-			double dy1 = p0.y - p1.y;
-			double dx2 = p2.x - p0.x;
-			double dy2 = p2.y - p0.y;
 
-			double m1 = dy1 / dx1;
-			double m2 = dy2 / dy2;
-			
-			double d1 = m2 / m1;
-			contourD1[i][j] = d1;
+	vector<cv::Point> semi_fingerPoint;
+	cv::cvtColor(handLayer2, handLayer2, cv::COLOR_GRAY2BGR);
+	vector<cv::Vec4i> defect;
+	cv::convexityDefects(contours[largestIndex], convexHullI[largestIndex], defect);
+	for (int i = 0; i < defect.size(); i++) {
+		cv::Vec4i v = defect[i];
+		int depth = v[3];
+		if (depth > 1) {
+			cv::Point startPoint = contours[largestIndex][v[0]];
+			cv::Point endPoint = contours[largestIndex][v[1]];
+			cv::Point farPoint = contours[largestIndex][v[2]];
 
-			double zero = 0;
+			double ms = ((double)(startPoint.y - farPoint.y)) / (startPoint.x - farPoint.x);
+			double me = ((double)(endPoint.y - farPoint.y)) / (endPoint.x - farPoint.x);
+			double angle = atan((me - ms) / (1 + (ms * me))) * (180 / 3.14159265);
 
-			if (d1 == 0) {
-				//cv::circle(handLayer1, p0, 2, cv::Scalar(255, 0, 0), -1);
-			}
-			else if (d1 == 1.0 / zero) {
-				cv::circle(handLayer1, p0, 2, cv::Scalar(0, 255, 0), -1);
-				contourDD[i].push_back(j);
-			}
-			else if (d1 == -1.0 / zero) {
-				cv::circle(handLayer1, p0, 2, cv::Scalar(0, 255, 255), -1);
-				contourDD[i].push_back(-j);
+			if (angle < 0) {
+				semi_fingerPoint.push_back(startPoint);
+				semi_fingerPoint.push_back(endPoint);
+				/*cv::circle(handLayer2, startPoint, 2, cv::Scalar(0, 255, 0), 1);
+				cv::circle(handLayer2, endPoint, 2, cv::Scalar(0, 255, 0), 1);*/
 			}
 		}
 	}
+	clusterPoint(semi_fingerPoint, fingerL2Point);
+	for (int i = 0; i < fingerL2Point.size(); i++) {
+		cv::circle(handLayer2, fingerL2Point[i], 4, cv::Scalar(0, 255, 0), 2);
+	}
+}
 
-	for (int i = 0; i < contourDD.size(); i++) {
-		for (int j = 0; j < contourDD[i].size(); j++) {
-			int d0 = contourDD[i][j];
-			int d1 = contourDD[i][(j - 1) % contourDD[i].size()];
-			int d2 = contourDD[i][(j + 1) % contourDD[i].size()];
-			if (d0 > 0 && d1 < 0) {
-				cv::Point p0 = contours[i][d0];
-				cv::Point p1 = contours[i][-d1];
-				int cx = (p0.x + p1.x) / 2;
-				int cy = (p0.y + p1.y) / 2;
-				cv::circle(handLayer1, cv::Point(cx, cy), 4, cv::Scalar(255, 0, 0), -1);
+void Application::evaluateLayer12()
+{
+	vector<cv::Point> fingerL1Point;
+	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
+		vector<cv::Point> group = it->second;
+		bool ignore = false;
+		for (int i = 0; i < group.size(); i++) {
+			cv::Point corner = group[i];
+			for (int j = 0; j < fingerL2Point.size(); j++) {
+				cv::Point finger = fingerL2Point[j];
+				double dist = sqrt(pow(corner.x - finger.x, 2) + pow(corner.y - finger.y, 2));
+				if (dist < DISTANCE_THESHOLD) {
+					ignore = true;
+				}
 			}
-			else if (d0 > 0 && d2 < 0) {
-				cv::Point p0 = contours[i][d0];
-				cv::Point p2 = contours[i][-d2];
-				int cx = (p0.x + p2.x) / 2;
-				int cy = (p0.y + p2.y) / 2;
-				cv::circle(handLayer1, cv::Point(cx, cy), 4, cv::Scalar(255, 0, 0), -1);
+		}
+
+		if (ignore)
+			continue;
+		double farthestDist = 0;
+		int farthestIndex = 0;
+		for (int i = 0; i < group.size(); i++) {
+			double d = cv::pointPolygonTest(hullL2, group[i], true);
+			if (d > farthestDist) {
+				farthestDist = d;
+				farthestIndex = i;
+			}
+		}
+
+		fingerL1Point.push_back(group[farthestIndex]);
+	}
+
+	for (int i = 0; i < fingerL1Point.size(); i++) {
+		cv::circle(handLayer2, fingerL1Point[i], 4, cv::Scalar(0, 0, 255), 2);
+	}
+}
+
+void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray)
+{
+	outputArray.clear();
+	vector<vector<double>> distMat(inputArray.size());
+	for (int i = 0; i < distMat.size(); i++) {
+		cv::Point pi = inputArray[i];
+		distMat[i] = vector<double>(inputArray.size());
+		for (int j = i + 1; j < distMat[i].size(); j++) {
+			cv::Point pj = inputArray[j];
+			distMat[i][j] = sqrt(pow(pi.x - pj.x, 2) + pow(pi.y - pj.y, 2));
+		}
+	}
+
+	vector<int> cluster(distMat.size(), 0);
+	int clusterCount = 1;
+	for (int i = 0; i < distMat.size(); i++) {
+		for (int j = i + 1; j < distMat[i].size(); j++) {
+			if (distMat[i][j] < DISTANCE_THESHOLD) {
+				if (cluster[i] == 0 && cluster[j] == 0) {
+					cluster[i] = clusterCount;
+					cluster[j] = clusterCount;
+					clusterCount++;
+				}
+				else if (cluster[i] == 0) {
+					cluster[i] = cluster[j];
+				}
+				else {
+					cluster[j] = cluster[i];
+				}
 			}
 		}
 	}
 
-	for (int i = 0; i < hullD1.size(); i++) {
-		for (int j = 0; j < hullD1[i].size(); j++) {
-			if (hullD1[i][j] != 0)
-				continue;
-			double m1 = hullD1[i][(j - 1) % hullD1[i].size()];
-			double m2 = hullD1[i][(j + 1) % hullD1[i].size()];
-			
-			double dm = m2 / m1;
-
-			if (dm == 0) {
-				//cv::circle(handLayer1, convexHull[i][j], 4, cv::Scalar(255, 0, 0), -1);
-			}
-			else if (dm < 0) {
-				//cv::circle(handLayer1, convexHull[i][j], 2, cv::Scalar(0, 255, 0), -1);
-			}
-			/*if (dm > 0) {
-				cv::circle(handLayer1, convexHull[i][j], 2, cv::Scalar(0, 255, 255), -1);
-			} else if(dm < 0) {
-				cv::circle(handLayer1, convexHull[i][j], 2, cv::Scalar(0, 255, 0), -1);
-			}*/
+	for (int i = 0; i < cluster.size(); i++) {
+		if (cluster[i] == 0) {
+			cluster[i] = clusterCount;
+			clusterCount++;
 		}
 	}
+
+	for (int i = 1; i < clusterCount; i++) {
+		// find centroid of cluster i
+		double sum_x = 0;
+		double sum_y = 0;
+		int count = 0;
+		for (int j = 0; j < cluster.size(); j++) {
+			if (cluster[j] == i) {
+				sum_x += inputArray[j].x;
+				sum_y += inputArray[j].y;
+				count++;
+			}
+		}
+		if (count == 0)
+			continue;
+		cv::Point pi = cv::Point(sum_x / count, sum_y / count);
+		outputArray.push_back(pi);
+	}
+
 }
 
 void Application::calculateContourArea(vector<cv::Point> contour, double * area)
