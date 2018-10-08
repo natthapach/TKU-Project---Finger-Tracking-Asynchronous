@@ -15,6 +15,7 @@ protected :
 	cv::Mat colorFrame;
 	cv::Mat depthFrame;
 	cv::Mat rawDepthFrame;
+	cv::Mat edgeColorFrame;
 	cv::Mat handMask;
 	cv::Mat handLayer1 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer2 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
@@ -23,6 +24,7 @@ protected :
 	vector<cv::Point> handLayer1Corners;
 
 	void transformColorFrame();
+	void buildEdgeColor();
 	void buildSkinMask();
 	void buildDepthHandMask();
 	void combineSkinHandMask();
