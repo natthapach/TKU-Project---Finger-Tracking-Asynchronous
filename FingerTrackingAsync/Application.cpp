@@ -40,6 +40,7 @@ void Application::start()
 			
 			//buildSkinMaskT.join(); // 18ms
 			buildDepthHandMaskT.join();	// ~8 from start 
+			//buildHistogram();
 
 			//thread combineSkinDepthT = thread(&Application::combineSkinHandMask, this);
 			//combineSkinDepthT.join(); // 7ms
@@ -64,6 +65,7 @@ void Application::start()
 			cv::imshow("Mask L2", handLayer2);
 			cv::imshow("Mask L3", handLayer3);
 			cv::imshow("Edge", edgeColorFrame);
+			cv::imshow("histogram", histogramFrame);
 		}
 
 		if (tickCount == 0) {
@@ -181,8 +183,11 @@ void Application::combineSkinHandMask()
 
 void Application::buildHand3Layers()
 {
-	ushort minDepth = 65535;
-	ushort maxDepth = 0;
+	vector<int> histogram(65536, 0);
+
+	minDepth = 65535;
+	maxDepth = 0;
+	int count = 0;
 	for (int i = 0; i < rawDepthFrame.rows; i++) {
 		ushort* rawRow = rawDepthFrame.ptr<ushort>(i);
 		uchar* maskRow = handMask.ptr<uchar>(i);
@@ -192,12 +197,28 @@ void Application::buildHand3Layers()
 					maxDepth = rawRow[j];
 				if (rawRow[j] < minDepth && rawRow[j] != 0)
 					minDepth = rawRow[j];
+				histogram[rawRow[j]] += 1;
+				count++;
 			}
 		}
 	}
 	int range = maxDepth - minDepth;
 	int l1_max = minDepth + (range * 0.2);
 	int l2_max = minDepth + (range * 0.6);
+	int maxHist = 0;
+	for (int i = minDepth; i <= maxDepth; i++) {
+		if (histogram[i] > maxHist) {
+			maxHist = histogram[i];
+		}
+	}
+	cv::Mat histogramImage = cv::Mat::zeros(cv::Size(400, 200), CV_8UC1);
+	for (int i = minDepth; i < maxDepth; i++) {
+		int h = (((double)histogram[i]) / maxHist) * 200;
+		int x = (i - minDepth) * 2;
+		cv::rectangle(histogramImage, cv::Rect(cv::Point(x, 200 - h), cv::Size(2, h)), cv::Scalar(255), -1);
+	}
+	histogramImage.copyTo(histogramFrame);
+
 	cv::threshold(rawDepthFrame, handLayer1, l1_max, 65535, cv::THRESH_BINARY_INV);
 	handLayer1.convertTo(handLayer1, CV_8UC1, 255.0 / 65535);
 	cv::bitwise_and(handMask, handLayer1, handLayer1);
@@ -211,6 +232,41 @@ void Application::buildHand3Layers()
 	int a = 0;
 }
 
+void Application::buildHistogram()
+{
+	cv::Mat mask, rawMasked;
+	//handMask.convertTo(mask, CV_16U);
+	//mask = cv::Mat::zeros(cv::Size(640, 480), CV_16UC1);
+	//cv::rectangle(mask, cv::Rect(cv::Point(100, 100), cv::Size(300, 300)), cv::Scalar(65535), -1);
+	cv::normalize(handMask, mask, 0, 65535, cv::NORM_MINMAX, CV_16UC1);
+	cv::bitwise_and(rawDepthFrame, mask, rawMasked);
+	cv::imshow("hist mask", mask);
+
+	vector<cv::Mat> bgr_planes;
+	split(rawMasked, bgr_planes);
+	int histSize = 2048;
+	float range[] = { 0, 2048};
+	const float* histRange = { range };
+	bool uniform = true; 
+	bool accumulate = false;
+	cv::Mat d_hist;
+	cv::calcHist(&bgr_planes[0], 1, 0, cv::Mat(), d_hist, 1, &histSize, &histRange, uniform, accumulate);
+	double minL, maxL;
+	cv::minMaxLoc(rawMasked, &minL, &maxL);
+	int nonZero = cv::countNonZero(rawMasked);
+	//cv::normalize(d_hist, d_hist, 0, rawMasked.rows, cv::NORM_MINMAX);
+	vector<float> histogram;
+	for (int i = 0; i < 2048; i++) {
+		histogram.push_back(d_hist.at<float>(i));
+	}
+	cv::Mat histImg = cv::Mat::zeros(cv::Size(400, 300), CV_8UC1);
+	int max = kinectReader.getHandDepth() + 100;
+	int min = kinectReader.getHandDepth() - 100;
+	int maxHist = d_hist.at<float>(max);
+	cv::normalize(rawMasked, rawMasked, 0, 255, cv::NORM_MINMAX, CV_8UC1);
+	cv::imshow("raw masked", rawMasked);
+}
+
 void Application::evaluateHandLayer1() // ~66ms
 {
 	handLayer1Corners.clear();
@@ -221,20 +277,20 @@ void Application::evaluateHandLayer1() // ~66ms
 	for (int j = 0; j < corner.rows; j++) {
 		float* cornerRow = corner.ptr<float>(j);
 		for (int i = 0; i < corner.cols; i++) {
-			if (cornerRow[i] > 180) {
+			if (cornerRow[i] > 160) {
 				if (handLayer1.ptr<uchar>(j)[i] > 0)
 					handLayer1Corners.push_back(cv::Point(i, j));
 			}
 		}
 	}
-	vector<vector<cv::Point>> contours;
+
 	vector<cv::Vec4i> hierachy;
-	cv::findContours(handLayer1, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+	cv::findContours(handLayer1, contoursL1, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 	cornerGroup.clear();
 	for (int i = 0; i < handLayer1Corners.size(); i++) {
 		cv::Point corner_i = handLayer1Corners[i];
-		for (int j = 0; j < contours.size(); j++) {
-			if (cv::pointPolygonTest(contours[j], corner_i, false) > 0) {
+		for (int j = 0; j < contoursL1.size(); j++) {
+			if (cv::pointPolygonTest(contoursL1[j], corner_i, false) > 0) {
 				if (cornerGroup.count(j) == 0) {
 					cornerGroup[j] = vector<cv::Point>();
 				}
@@ -310,7 +366,20 @@ void Application::evaluateLayer12()
 	vector<cv::Point> fingerL1Point;
 	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
 		vector<cv::Point> group = it->second;
+		vector<cv::Point> contourL1 = contoursL1[it->first];
 		bool ignore = false;
+		for (int i = 0; i < fingerL2Point.size(); i++) {
+			double d = cv::pointPolygonTest(contourL1, fingerL2Point[i], true);
+			if (d >= 0) {
+				cv::circle(handLayer2, fingerL2Point[i], 6, cv::Scalar(0, 0, 255), 2);
+				cv::drawContours(handLayer2, contoursL1, it->first, cv::Scalar(0, 0, 255), 2);
+				ignore = true;
+				break;
+			}
+		}
+		if (ignore)
+			break;
+
 		for (int i = 0; i < group.size(); i++) {
 			cv::Point corner = group[i];
 			for (int j = 0; j < fingerL2Point.size(); j++) {
