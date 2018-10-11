@@ -105,11 +105,12 @@ void Application::buildEdgeColor()	// ~45ms
 	float handPosY = kinectReader.getHandPosY();
 	cv::Mat gray;
 	cv::cvtColor(colorFrame, gray, cv::COLOR_BGR2GRAY);
-	cv::Canny(gray, edgeColorFrame, 50, 200, 3);
-	cv::dilate(edgeColorFrame, edgeColorFrame, cv::Mat());
-	cv::bitwise_not(edgeColorFrame, edgeColorFrame);
-	cv::floodFill(edgeColorFrame, cv::Point(handPosX, handPosY), cv::Scalar(128));
-	cv::circle(edgeColorFrame, cv::Point(handPosX, handPosY), 4, cv::Scalar(0, 0, 0), -1);
+	//cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0);
+	cv::Canny(gray, edgeColorFrame, 0, 150, 3);
+	//cv::dilate(edgeColorFrame, edgeColorFrame, cv::Mat());
+	//cv::bitwise_not(edgeColorFrame, edgeColorFrame);
+	//cv::floodFill(edgeColorFrame, cv::Point(handPosX, handPosY), cv::Scalar(128));
+	//cv::circle(edgeColorFrame, cv::Point(handPosX, handPosY), 4, cv::Scalar(0, 0, 0), -1);
 }
 
 void Application::buildSkinMask()
