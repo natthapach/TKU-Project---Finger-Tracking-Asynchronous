@@ -117,6 +117,11 @@ int KinectReader::getHandDepth()
 	return handDepth;
 }
 
+int KinectReader::getDepthHandRange()
+{
+	return RANGE;
+}
+
 void KinectReader::asyncReadRGBFrame()
 {
 	uchar img[480][640][3];

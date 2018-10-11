@@ -20,6 +20,7 @@ public :
 	float getHandPosX();
 	float getHandPosY();
 	int getHandDepth();
+	int getDepthHandRange();
 protected :
 	const int RANGE = 100;
 	openni::Device device;

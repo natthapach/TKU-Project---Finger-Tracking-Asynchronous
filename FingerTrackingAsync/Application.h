@@ -10,6 +10,17 @@ protected :
 	ushort minDepth = 0;
 
 	const int DISTANCE_THESHOLD = 10;
+	const double BUILD_LAYER_1_THRESHOLD = 0.2;
+	const double BUILD_LAYER_2_THRESHOLD = 0.45;
+	const double BUILD_LAYER_3_THRESHOLD = 0.6;
+
+	const string WINDOW_RGB = "RGB";
+	const string WINDOW_DEPTH = "Depth";
+	const string WINDOW_MASK_L1 = "Mask Layer 1";
+	const string WINDOW_MASK_L2 = "Mask Layer 2";
+	const string WINDOW_MASK_L3 = "Mask Layer 3";
+	const string WINDOW_HISTOGRAM = "Histogram";
+
 	int64 tickCount = 0;
 	long frameCount = 0;
 	time_t startTimestamp;
@@ -42,13 +53,18 @@ protected :
 	void combineSkinHandMask();
 	void buildHand3Layers();
 	void buildHistogram();
+	void buildRawHandHistogram();
 
 	void evaluateHandLayer1();
 	void evaluateHandLayer2();
+	void evaluateHandLayer3();
 	void evaluateLayer12();
 
 	void clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray);
+
+	void captureFrame();
 private:
 	KinectReader kinectReader;
 	void calculateContourArea(vector<cv::Point> contour, double *area);
+	int performKeyboardEvent(int key);
 };

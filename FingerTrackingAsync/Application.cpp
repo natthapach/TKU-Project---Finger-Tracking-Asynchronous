@@ -6,9 +6,6 @@
 
 using namespace std;
 
-const string WINDOW_RGB = "RGB";
-const string WINDOW_DEPTH = "Depth";
-
 int Application::initialize()
 {
 	int status = 0;
@@ -18,6 +15,9 @@ int Application::initialize()
 
 	cv::namedWindow(WINDOW_RGB, cv::WINDOW_AUTOSIZE);
 	cv::namedWindow(WINDOW_DEPTH, cv::WINDOW_AUTOSIZE);
+	cv::namedWindow(WINDOW_MASK_L1, cv::WINDOW_AUTOSIZE);
+	cv::namedWindow(WINDOW_MASK_L2, cv::WINDOW_AUTOSIZE);
+	cv::namedWindow(WINDOW_MASK_L3, cv::WINDOW_AUTOSIZE);
 	return 0;
 }
 
@@ -47,6 +47,9 @@ void Application::start()
 
 			thread buildHand3LayersT = thread(&Application::buildHand3Layers, this);
 			buildHand3LayersT.join(); //10
+
+			//buildHistogram();
+			buildRawHandHistogram();
 			int a = 0;
 			thread evaluateHandLayer1T = thread(&Application::evaluateHandLayer1, this);
 			thread evaluateHandLater2T = thread(&Application::evaluateHandLayer2, this);
@@ -61,9 +64,9 @@ void Application::start()
 			int b = 0;
 			buildEdgeColorT.join();
 
-			cv::imshow("Mask L1", handLayer1); // 14
-			cv::imshow("Mask L2", handLayer2);
-			cv::imshow("Mask L3", handLayer3);
+			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
+			cv::imshow(WINDOW_MASK_L2, handLayer2);
+			cv::imshow(WINDOW_MASK_L3, handLayer3);
 			cv::imshow("Edge", edgeColorFrame);
 			cv::imshow("histogram", histogramFrame);
 		}
@@ -75,7 +78,7 @@ void Application::start()
 			int64 t = cv::getTickCount();
 			double fpsT = cv::getTickFrequency() / (t - tickCount);
 			tickCount = t;
-			cout << "FPS T " << fpsT << endl;
+			cout << "FPS " << fpsT << endl;
 		}
 
 		//cv::normalize(rawDepthFrame, rawDepthFrame, 0, 255, cv::NORM_MINMAX, CV_8UC1);
@@ -83,8 +86,9 @@ void Application::start()
 		cv::imshow(WINDOW_DEPTH, depthFrame);
 
 		int key = cv::waitKey(1);
-		if (key == 27)
+		if (performKeyboardEvent(key) != 0) {
 			break;
+		}
 	}
 	
 	cv::destroyAllWindows();
@@ -184,7 +188,6 @@ void Application::combineSkinHandMask()
 
 void Application::buildHand3Layers()
 {
-	vector<int> histogram(65536, 0);
 
 	minDepth = 65535;
 	maxDepth = 0;
@@ -198,14 +201,47 @@ void Application::buildHand3Layers()
 					maxDepth = rawRow[j];
 				if (rawRow[j] < minDepth && rawRow[j] != 0)
 					minDepth = rawRow[j];
-				histogram[rawRow[j]] += 1;
 				count++;
 			}
 		}
 	}
 	int range = maxDepth - minDepth;
-	int l1_max = minDepth + (range * 0.2);
-	int l2_max = minDepth + (range * 0.6);
+	int l1_max = minDepth + (range * BUILD_LAYER_1_THRESHOLD);
+	int l2_max = minDepth + (range * BUILD_LAYER_2_THRESHOLD);
+	int l3_max = minDepth + (range * BUILD_LAYER_3_THRESHOLD);
+
+	cv::threshold(rawDepthFrame, handLayer1, l1_max, 65535, cv::THRESH_BINARY_INV);
+	handLayer1.convertTo(handLayer1, CV_8UC1, 255.0 / 65535);
+	cv::bitwise_and(handMask, handLayer1, handLayer1);
+
+	cv::threshold(rawDepthFrame, handLayer2, l2_max, 65535, cv::THRESH_BINARY_INV);
+	handLayer2.convertTo(handLayer2, CV_8UC1, 255.0 / 65535);
+	cv::bitwise_and(handMask, handLayer2, handLayer2);
+
+	cv::threshold(rawDepthFrame, handLayer3, l3_max, 65535, cv::THRESH_BINARY_INV);
+	handLayer3.convertTo(handLayer3, CV_8UC1, 255.0 / 65535);
+	cv::bitwise_and(handMask, handLayer3, handLayer3);
+}
+
+void Application::buildHistogram()
+{
+	vector<int> histogram(65536, 0);
+	int minDepth = 65536;
+	int maxDepth = 0;
+	for (int i = 0; i < rawDepthFrame.rows; i++) {
+		ushort* rawRow = rawDepthFrame.ptr<ushort>(i);
+		uchar* maskRow = handLayer3.ptr<uchar>(i);
+		for (int j = 0; j < rawDepthFrame.cols; j++) {
+			if (maskRow[j] != 0) {
+				if (rawRow[j] > maxDepth)
+					maxDepth = rawRow[j];
+				if (rawRow[j] < minDepth && rawRow[j] != 0)
+					minDepth = rawRow[j];
+				histogram[rawRow[j]] += 1;
+			}
+		}
+	}
+
 	int maxHist = 0;
 	for (int i = minDepth; i <= maxDepth; i++) {
 		if (histogram[i] > maxHist) {
@@ -220,52 +256,40 @@ void Application::buildHand3Layers()
 	}
 	histogramImage.copyTo(histogramFrame);
 
-	cv::threshold(rawDepthFrame, handLayer1, l1_max, 65535, cv::THRESH_BINARY_INV);
-	handLayer1.convertTo(handLayer1, CV_8UC1, 255.0 / 65535);
-	cv::bitwise_and(handMask, handLayer1, handLayer1);
-
-	cv::threshold(rawDepthFrame, handLayer2, l2_max, 65535, cv::THRESH_BINARY_INV);
-	handLayer2.convertTo(handLayer2, CV_8UC1, 255.0 / 65535);
-	cv::bitwise_and(handMask, handLayer2, handLayer2);
-
-	handMask.copyTo(handLayer3);
-
-	int a = 0;
 }
 
-void Application::buildHistogram()
+void Application::buildRawHandHistogram()
 {
-	cv::Mat mask, rawMasked;
-	//handMask.convertTo(mask, CV_16U);
-	//mask = cv::Mat::zeros(cv::Size(640, 480), CV_16UC1);
-	//cv::rectangle(mask, cv::Rect(cv::Point(100, 100), cv::Size(300, 300)), cv::Scalar(65535), -1);
-	cv::normalize(handMask, mask, 0, 65535, cv::NORM_MINMAX, CV_16UC1);
-	cv::bitwise_and(rawDepthFrame, mask, rawMasked);
-	cv::imshow("hist mask", mask);
-
-	vector<cv::Mat> bgr_planes;
-	split(rawMasked, bgr_planes);
-	int histSize = 2048;
-	float range[] = { 0, 2048};
-	const float* histRange = { range };
-	bool uniform = true; 
-	bool accumulate = false;
-	cv::Mat d_hist;
-	cv::calcHist(&bgr_planes[0], 1, 0, cv::Mat(), d_hist, 1, &histSize, &histRange, uniform, accumulate);
-	double minL, maxL;
-	cv::minMaxLoc(rawMasked, &minL, &maxL);
-	int nonZero = cv::countNonZero(rawMasked);
-	//cv::normalize(d_hist, d_hist, 0, rawMasked.rows, cv::NORM_MINMAX);
-	vector<float> histogram;
-	for (int i = 0; i < 2048; i++) {
-		histogram.push_back(d_hist.at<float>(i));
+	vector<int> histogram(65536, 0);
+	int handDepth = kinectReader.getHandDepth();
+	int range = kinectReader.getDepthHandRange();
+	int minDepth = 65536;
+	int maxDepth = 0;
+	for (int i = 0; i < rawDepthFrame.rows; i++) {
+		ushort* rawRow = rawDepthFrame.ptr<ushort>(i);
+		uchar* maskRow = handMask.ptr<uchar>(i);
+		for (int j = 0; j < rawDepthFrame.cols; j++) {
+			if (maskRow[j] != 0) {
+				if (rawRow[j] > maxDepth)
+					maxDepth = rawRow[j];
+				if (rawRow[j] < minDepth && rawRow[j] != 0)
+					minDepth = rawRow[j];
+				histogram[rawRow[j]] += 1;
+			}
+		}
 	}
-	cv::Mat histImg = cv::Mat::zeros(cv::Size(400, 300), CV_8UC1);
-	int max = kinectReader.getHandDepth() + 100;
-	int min = kinectReader.getHandDepth() - 100;
-	int maxHist = d_hist.at<float>(max);
-	cv::normalize(rawMasked, rawMasked, 0, 255, cv::NORM_MINMAX, CV_8UC1);
-	cv::imshow("raw masked", rawMasked);
+
+	const double MAX_SCALE_DEPTH = 3000;
+	cv::Mat histogramImage = cv::Mat::zeros(cv::Size(402, 200), CV_8UC3);
+	for (int i = handDepth - range; i <= handDepth + range && i >= 0 && i <= 65535; i++) {
+		int h = (histogram[i] / MAX_SCALE_DEPTH) * 200;
+		int x = (i - (handDepth - range)) * 2;
+		cv::rectangle(histogramImage, cv::Rect(cv::Point(x, 200 - h), cv::Size(2, h)), cv::Scalar(255, 255, 255), -1);
+		if (i == handDepth) {
+			cv::line(histogramImage, cv::Point(x, 0), cv::Point(x, 200), cv::Scalar(0, 0, 255), 1);
+		}
+	}
+	histogramImage.copyTo(histogramFrame);
 }
 
 void Application::evaluateHandLayer1() // ~66ms
@@ -310,6 +334,64 @@ void Application::evaluateHandLayer2()	// 7ms
 	vector<vector<cv::Point>> contours;
 	vector<cv::Vec4i> hierachy;
 	cv::findContours(handLayer2, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0,0));
+	vector<vector<cv::Point>> convexHull(contours.size());
+	vector<vector<int>> convexHullI(contours.size());
+	double largestArea = 0;
+	int largestIndex = 0;
+	for (int i = 0; i < contours.size(); i++) {
+		cv::convexHull(contours[i], convexHull[i]);
+		cv::convexHull(contours[i], convexHullI[i]);
+
+		double a = cv::contourArea(contours[i]);
+		if (a > largestArea) {
+			largestArea = a;
+			largestIndex = i;
+		}
+	}
+	if (largestArea == 0)
+		return;
+
+	hullL2.clear();
+	for (int i = 0; i < convexHull[largestIndex].size(); i++) {
+		hullL2.push_back(convexHull[largestIndex][i]);
+	}
+
+	vector<cv::Point> semi_fingerPoint;
+	cv::cvtColor(handLayer2, handLayer2, cv::COLOR_GRAY2BGR);
+	vector<cv::Vec4i> defect;
+	cv::convexityDefects(contours[largestIndex], convexHullI[largestIndex], defect);
+	for (int i = 0; i < defect.size(); i++) {
+		cv::Vec4i v = defect[i];
+		int depth = v[3];
+		if (depth > 1) {
+			cv::Point startPoint = contours[largestIndex][v[0]];
+			cv::Point endPoint = contours[largestIndex][v[1]];
+			cv::Point farPoint = contours[largestIndex][v[2]];
+
+			double ms = ((double)(startPoint.y - farPoint.y)) / (startPoint.x - farPoint.x);
+			double me = ((double)(endPoint.y - farPoint.y)) / (endPoint.x - farPoint.x);
+			double angle = atan((me - ms) / (1 + (ms * me))) * (180 / 3.14159265);
+
+			if (angle < 0) {
+				semi_fingerPoint.push_back(startPoint);
+				semi_fingerPoint.push_back(endPoint);
+				/*cv::circle(handLayer2, startPoint, 2, cv::Scalar(0, 255, 0), 1);
+				cv::circle(handLayer2, endPoint, 2, cv::Scalar(0, 255, 0), 1);*/
+			}
+		}
+	}
+	clusterPoint(semi_fingerPoint, fingerL2Point);
+	for (int i = 0; i < fingerL2Point.size(); i++) {
+		cv::circle(handLayer2, fingerL2Point[i], 4, cv::Scalar(0, 255, 0), 2);
+	}
+}
+
+void Application::evaluateHandLayer3()
+{
+	// TODO : perform on layer 3
+	vector<vector<cv::Point>> contours;
+	vector<cv::Vec4i> hierachy;
+	cv::findContours(handLayer2, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
 	vector<vector<cv::Point>> convexHull(contours.size());
 	vector<vector<int>> convexHullI(contours.size());
 	double largestArea = 0;
@@ -472,7 +554,40 @@ void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>&
 
 }
 
+void Application::captureFrame()
+{
+	time_t ts = time(nullptr);
+	
+	//char buffer_hist[80];
+	//sprintf_s(buffer_hist, "%d - histogram.jpg", ts);
+	//cv::imwrite(buffer_hist, histogramFrame);
+	//
+	//char buffer_mask3[80];
+	//sprintf_s(buffer_mask3, "%d -  hand layer 3.jpg", ts);
+	//cv::imwrite(buffer_mask3, handLayer3);
+
+	cv::Mat scaledHistogram, concat;
+	cv::Mat row = cv::Mat::zeros(cv::Size(400, 280), CV_8UC1);
+	histogramFrame.copyTo(scaledHistogram);
+
+	scaledHistogram.push_back(row);
+	cv::hconcat(scaledHistogram, handLayer3, concat);
+	cv::rectangle(concat, cv::Rect(cv::Point(0, 0), cv::Size(400, 200)), cv::Scalar(255), 1);
+	char buffer_concat[80];
+	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
+	cv::imwrite(buffer_concat, concat);
+}
+
 void Application::calculateContourArea(vector<cv::Point> contour, double * area)
 {
 	(*area) = cv::contourArea(contour);
+}
+
+int Application::performKeyboardEvent(int key)
+{
+	if (key == 27) // esc
+		return 1;
+	else if (key == 'c' || key == 'C')
+		captureFrame();
+	return 0;
 }
