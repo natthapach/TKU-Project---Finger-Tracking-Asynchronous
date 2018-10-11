@@ -566,13 +566,20 @@ void Application::captureFrame()
 	//sprintf_s(buffer_mask3, "%d -  hand layer 3.jpg", ts);
 	//cv::imwrite(buffer_mask3, handLayer3);
 
-	cv::Mat scaledHistogram, concat;
-	cv::Mat row = cv::Mat::zeros(cv::Size(400, 280), CV_8UC1);
+	cv::Mat scaledHistogram, concat, rawHand, handMask16U, edgeFrameC3;
+	//handMask.convertTo(handMask16U, CV_16UC1);
+	cv::normalize(handMask, handMask16U, 0, 65535, cv::NORM_MINMAX, CV_16UC1);
+	cv::bitwise_and(rawDepthFrame, handMask16U, rawHand);
+	cv::normalize(rawHand, rawHand, 0, 255, cv::NORM_MINMAX, CV_8UC1);
+	cv::cvtColor(rawHand, rawHand, cv::COLOR_GRAY2BGR);
+	cv::cvtColor(edgeColorFrame, edgeFrameC3, cv::COLOR_GRAY2BGR);
+	cv::Mat row = cv::Mat::zeros(cv::Size(402, 280), CV_8UC3);
 	histogramFrame.copyTo(scaledHistogram);
-
 	scaledHistogram.push_back(row);
-	cv::hconcat(scaledHistogram, handLayer3, concat);
-	cv::rectangle(concat, cv::Rect(cv::Point(0, 0), cv::Size(400, 200)), cv::Scalar(255), 1);
+
+	cv::hconcat(scaledHistogram, rawHand, concat);
+	cv::hconcat(concat, edgeFrameC3, concat);
+	cv::rectangle(concat, cv::Rect(cv::Point(0, 0), cv::Size(402, 200)), cv::Scalar(255), 1);
 	char buffer_concat[80];
 	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
 	cv::imwrite(buffer_concat, concat);
