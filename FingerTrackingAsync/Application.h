@@ -60,7 +60,7 @@ protected :
 	void evaluateHandLayer3();
 	void evaluateLayer12();
 
-	void clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray);
+	void clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh);
 
 	void captureFrame();
 private:

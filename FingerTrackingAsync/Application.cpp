@@ -309,6 +309,7 @@ void Application::evaluateHandLayer1() // ~66ms
 		}
 	}
 
+	// group corner by contours
 	vector<cv::Vec4i> hierachy;
 	cv::findContours(handLayer1, contoursL1, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 	cornerGroup.clear();
@@ -323,7 +324,21 @@ void Application::evaluateHandLayer1() // ~66ms
 			}
 		}
 	}
+
+	// cluster very near corner
 	cv::cvtColor(handLayer1, handLayer1, cv::COLOR_GRAY2BGR);
+	map<int, vector<cv::Point>> cornerGroupCluster;
+	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
+		vector<cv::Point> cluster;
+		clusterPoint(it->second, cluster, 3);
+		cornerGroup[it->first] = cluster;
+
+		for (int i = 0; i < cluster.size(); i++) {
+			cv::circle(handLayer1, cluster[i], 4, cv::Scalar(255, 0, 255), 2);
+		}
+	}
+
+	
 	for (int i = 0; i < handLayer1Corners.size(); i++) {
 		cv::circle(handLayer1, handLayer1Corners[i], 1, cv::Scalar(0, 0, 255), -1);
 	}
@@ -380,7 +395,7 @@ void Application::evaluateHandLayer2()	// 7ms
 			}
 		}
 	}
-	clusterPoint(semi_fingerPoint, fingerL2Point);
+	clusterPoint(semi_fingerPoint, fingerL2Point, DISTANCE_THESHOLD);
 	for (int i = 0; i < fingerL2Point.size(); i++) {
 		cv::circle(handLayer2, fingerL2Point[i], 4, cv::Scalar(0, 255, 0), 2);
 	}
@@ -438,7 +453,7 @@ void Application::evaluateHandLayer3()
 			}
 		}
 	}
-	clusterPoint(semi_fingerPoint, fingerL2Point);
+	clusterPoint(semi_fingerPoint, fingerL2Point, DISTANCE_THESHOLD);
 	for (int i = 0; i < fingerL2Point.size(); i++) {
 		cv::circle(handLayer2, fingerL2Point[i], 4, cv::Scalar(0, 255, 0), 2);
 	}
@@ -494,7 +509,7 @@ void Application::evaluateLayer12()
 	}
 }
 
-void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray)
+void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh)
 {
 	outputArray.clear();
 	vector<vector<double>> distMat(inputArray.size());
@@ -511,7 +526,7 @@ void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>&
 	int clusterCount = 1;
 	for (int i = 0; i < distMat.size(); i++) {
 		for (int j = i + 1; j < distMat[i].size(); j++) {
-			if (distMat[i][j] < DISTANCE_THESHOLD) {
+			if (distMat[i][j] < thresh) {
 				if (cluster[i] == 0 && cluster[j] == 0) {
 					cluster[i] = clusterCount;
 					cluster[j] = clusterCount;
