@@ -9,10 +9,23 @@ protected :
 	ushort maxDepth = 65535;
 	ushort minDepth = 0;
 
-	const int DISTANCE_THESHOLD = 10;
+	/* Percentage threshold for build hand layer 1 */
 	const double BUILD_LAYER_1_THRESHOLD = 0.2;
-	const double BUILD_LAYER_2_THRESHOLD = 0.45;
-	const double BUILD_LAYER_3_THRESHOLD = 0.6;
+	/* Percentage threshold for build hand layer 2 */
+	const double BUILD_LAYER_2_THRESHOLD = 0.6;
+	/* Percentage threshold for build hand layer 3 */
+	const double BUILD_LAYER_3_THRESHOLD = 1.0;
+
+
+	/* General threshold for cluster points */
+	const int DISTANCE_THESHOLD = 10;
+	/* Threshold for cluster corners on hand layer 1 */
+	const int DISTANCE_THRESHOLD_CORNER_LAYER_1 = 3;
+	/* Threshold for ignore contours on hand layer 1 */
+	const double AREA_CONTOUR_THRESHOLD = 15;
+
+	/* Minimum distance for merge finger layer 2 to contour layer 1 */
+	const int MIN_DIST_12 = -4;
 
 	const string WINDOW_RGB = "RGB";
 	const string WINDOW_DEPTH = "Depth";
@@ -61,6 +74,7 @@ protected :
 	void evaluateLayer12();
 
 	void clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh);
+	double calDistance(cv::Point p1, cv::Point p2);
 
 	void captureFrame();
 private:

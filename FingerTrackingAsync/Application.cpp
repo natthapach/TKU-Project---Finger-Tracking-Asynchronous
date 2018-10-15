@@ -327,17 +327,23 @@ void Application::evaluateHandLayer1() // ~66ms
 
 	// cluster very near corner
 	cv::cvtColor(handLayer1, handLayer1, cv::COLOR_GRAY2BGR);
-	map<int, vector<cv::Point>> cornerGroupCluster;
+	vector<int> ignoreContours;
 	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
-		vector<cv::Point> cluster;
-		clusterPoint(it->second, cluster, 3);
-		cornerGroup[it->first] = cluster;
-
-		for (int i = 0; i < cluster.size(); i++) {
-			cv::circle(handLayer1, cluster[i], 4, cv::Scalar(255, 0, 255), 2);
+		double area = cv::contourArea(contoursL1[it->first]);
+		if (area < AREA_CONTOUR_THRESHOLD) {
+			ignoreContours.push_back(it->first);
+			continue;
 		}
 	}
-
+	for (int i = 0; i < ignoreContours.size(); i++) {
+		cornerGroup.erase(ignoreContours[i]);
+	}
+	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
+		vector<cv::Point> cluster;
+		clusterPoint(it->second, cluster, DISTANCE_THRESHOLD_CORNER_LAYER_1);
+		cornerGroup[it->first] = cluster;
+	}
+	
 	
 	for (int i = 0; i < handLayer1Corners.size(); i++) {
 		cv::circle(handLayer1, handLayer1Corners[i], 1, cv::Scalar(0, 0, 255), -1);
@@ -346,6 +352,9 @@ void Application::evaluateHandLayer1() // ~66ms
 
 void Application::evaluateHandLayer2()	// 7ms
 {
+	cv::Mat handLayer2Copy;
+	handLayer2.copyTo(handLayer2Copy);
+
 	vector<vector<cv::Point>> contours;
 	vector<cv::Vec4i> hierachy;
 	cv::findContours(handLayer2, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0,0));
@@ -371,14 +380,15 @@ void Application::evaluateHandLayer2()	// 7ms
 		hullL2.push_back(convexHull[largestIndex][i]);
 	}
 
-	vector<cv::Point> semi_fingerPoint;
+	vector<cv::Point> semi_fingerPoint, abyss_finger;
 	cv::cvtColor(handLayer2, handLayer2, cv::COLOR_GRAY2BGR);
 	vector<cv::Vec4i> defect;
 	cv::convexityDefects(contours[largestIndex], convexHullI[largestIndex], defect);
+	bool firstF = true;
 	for (int i = 0; i < defect.size(); i++) {
 		cv::Vec4i v = defect[i];
 		int depth = v[3];
-		if (depth > 1) {
+		if (depth > 2000) {
 			cv::Point startPoint = contours[largestIndex][v[0]];
 			cv::Point endPoint = contours[largestIndex][v[1]];
 			cv::Point farPoint = contours[largestIndex][v[2]];
@@ -390,73 +400,136 @@ void Application::evaluateHandLayer2()	// 7ms
 			if (angle < 0) {
 				semi_fingerPoint.push_back(startPoint);
 				semi_fingerPoint.push_back(endPoint);
+				abyss_finger.push_back(farPoint);
+				cv::circle(handLayer2, farPoint, 4, cv::Scalar(255, 255, 0), 2);
 				/*cv::circle(handLayer2, startPoint, 2, cv::Scalar(0, 255, 0), 1);
 				cv::circle(handLayer2, endPoint, 2, cv::Scalar(0, 255, 0), 1);*/
 			}
 		}
 	}
+	
 	clusterPoint(semi_fingerPoint, fingerL2Point, DISTANCE_THESHOLD);
+	double sum_x = 0;
+	double sum_y = 0;
+	int count = 0;
 	for (int i = 0; i < fingerL2Point.size(); i++) {
 		cv::circle(handLayer2, fingerL2Point[i], 4, cv::Scalar(0, 255, 0), 2);
+		sum_x += fingerL2Point[i].x;
+		sum_y += fingerL2Point[i].y;
+		count += 1;
+	}
+	if (count == 0)
+		return;
+
+	// find finger centroid point
+	cv::Point fingerCentroid;
+	fingerCentroid.x = sum_x / count;
+	fingerCentroid.y = sum_y / count;
+	cv::circle(handLayer2, fingerCentroid, 4, cv::Scalar(100, 255, 100), -1);
+
+	double maxAbyssDist1 = 0;
+	double maxAbyssDist2 = 0;
+	int maxAbyssIndex1 = -1;
+	int maxAbyssIndex2 = -1;
+	for (int i = 0; i < abyss_finger.size(); i++) {
+		double d = calDistance(fingerCentroid, abyss_finger[i]);
+		if (d > maxAbyssDist1) {
+			maxAbyssDist2 = maxAbyssDist1;
+			maxAbyssIndex2 = maxAbyssIndex1;
+			maxAbyssDist1 = d;
+			maxAbyssIndex1 = i;
+		}
+		else if (d > maxAbyssDist2) {
+			maxAbyssDist2 = d;
+			maxAbyssIndex2 = i;
+		}
+	}
+	if (maxAbyssIndex1 != -1)
+		cv::circle(handLayer2, abyss_finger[maxAbyssIndex1], 4, cv::Scalar(255, 255, 0), -1);
+	if (maxAbyssIndex2 != -1)
+		cv::circle(handLayer2, abyss_finger[maxAbyssIndex2], 4, cv::Scalar(255, 0, 255), -1);
+
+	
+	for (int i = 0; i < abyss_finger.size(); i++) {
+		int k = (maxAbyssIndex1 + i) % abyss_finger.size();
+		int j = (maxAbyssIndex1 + i + 1) % abyss_finger.size();
+		
+		if ((k == maxAbyssIndex1 && j == maxAbyssIndex2) || (k == maxAbyssIndex2 && j == maxAbyssIndex1))
+			continue;
+		cv::Point pk = abyss_finger[k];
+		cv::Point pj = abyss_finger[j];
+		cv::Point p, q, pp;
+
+		if (k == maxAbyssIndex1 || k == maxAbyssIndex2) {
+			p = pk;
+			q = pj;
+		}
+		else if (j == maxAbyssIndex1 || j == maxAbyssIndex2) {
+			p = pj;
+			q = pk;
+		}
+		else {
+			cv::line(handLayer2Copy, pk, pj, cv::Scalar(0, 0, 0), 5);
+			continue;
+		}			
+
+		double dx = p.x - q.x;
+		double dy = p.y - q.y;
+
+		int MOVE_DISTANCE = 100;
+		if (dx > 0) {
+			pp.x = p.x + MOVE_DISTANCE;
+			if (dy != 0) {
+				pp.y = p.y + MOVE_DISTANCE * (dy / dx);
+			}
+			else {
+				pp.y = p.y;
+			}
+		}
+		else if (dx < 0) {
+			pp.x = p.x - MOVE_DISTANCE;
+			if (dy != 0) {
+				pp.y = p.y - MOVE_DISTANCE * (dy / dx);
+			}
+			else {
+				pp.y = p.y;
+			}
+		}
+		else {
+			pp.x = p.x;
+			if (dy > 0) {
+				pp.y = p.y + MOVE_DISTANCE;
+			}
+			else {
+				pp.y = p.y - MOVE_DISTANCE;
+			}
+		}
+		cv::line(handLayer2Copy, pp, q, cv::Scalar(0, 0, 0), 5);
+	}
+
+	vector<vector<cv::Point>> contoursCopy;
+	vector<cv::Vec4i> hierachyCopy;
+	cv::findContours(handLayer2Copy, contoursCopy, hierachyCopy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+	
+	double largestAreaCopy = 0;
+	double largestIndexCopy = -1;
+	for (int i = 0; i < contoursCopy.size(); i++) {
+		double a = cv::contourArea(contoursCopy[i]);
+		if (a > largestAreaCopy) {
+			largestAreaCopy = a;
+			largestIndexCopy = i;
+		}
+	}
+
+	if (largestIndexCopy != -1) {
+		cv::drawContours(handLayer2, contoursCopy, largestIndexCopy, cv::Scalar(128, 128, 128), -1);
 	}
 }
 
 void Application::evaluateHandLayer3()
 {
 	// TODO : perform on layer 3
-	vector<vector<cv::Point>> contours;
-	vector<cv::Vec4i> hierachy;
-	cv::findContours(handLayer2, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
-	vector<vector<cv::Point>> convexHull(contours.size());
-	vector<vector<int>> convexHullI(contours.size());
-	double largestArea = 0;
-	int largestIndex = 0;
-	for (int i = 0; i < contours.size(); i++) {
-		cv::convexHull(contours[i], convexHull[i]);
-		cv::convexHull(contours[i], convexHullI[i]);
-
-		double a = cv::contourArea(contours[i]);
-		if (a > largestArea) {
-			largestArea = a;
-			largestIndex = i;
-		}
-	}
-	if (largestArea == 0)
-		return;
-
-	hullL2.clear();
-	for (int i = 0; i < convexHull[largestIndex].size(); i++) {
-		hullL2.push_back(convexHull[largestIndex][i]);
-	}
-
-	vector<cv::Point> semi_fingerPoint;
-	cv::cvtColor(handLayer2, handLayer2, cv::COLOR_GRAY2BGR);
-	vector<cv::Vec4i> defect;
-	cv::convexityDefects(contours[largestIndex], convexHullI[largestIndex], defect);
-	for (int i = 0; i < defect.size(); i++) {
-		cv::Vec4i v = defect[i];
-		int depth = v[3];
-		if (depth > 1) {
-			cv::Point startPoint = contours[largestIndex][v[0]];
-			cv::Point endPoint = contours[largestIndex][v[1]];
-			cv::Point farPoint = contours[largestIndex][v[2]];
-
-			double ms = ((double)(startPoint.y - farPoint.y)) / (startPoint.x - farPoint.x);
-			double me = ((double)(endPoint.y - farPoint.y)) / (endPoint.x - farPoint.x);
-			double angle = atan((me - ms) / (1 + (ms * me))) * (180 / 3.14159265);
-
-			if (angle < 0) {
-				semi_fingerPoint.push_back(startPoint);
-				semi_fingerPoint.push_back(endPoint);
-				/*cv::circle(handLayer2, startPoint, 2, cv::Scalar(0, 255, 0), 1);
-				cv::circle(handLayer2, endPoint, 2, cv::Scalar(0, 255, 0), 1);*/
-			}
-		}
-	}
-	clusterPoint(semi_fingerPoint, fingerL2Point, DISTANCE_THESHOLD);
-	for (int i = 0; i < fingerL2Point.size(); i++) {
-		cv::circle(handLayer2, fingerL2Point[i], 4, cv::Scalar(0, 255, 0), 2);
-	}
+	
 }
 
 void Application::evaluateLayer12()
@@ -468,21 +541,22 @@ void Application::evaluateLayer12()
 		bool ignore = false;
 		for (int i = 0; i < fingerL2Point.size(); i++) {
 			double d = cv::pointPolygonTest(contourL1, fingerL2Point[i], true);
-			if (d >= 0) {
-				cv::circle(handLayer2, fingerL2Point[i], 6, cv::Scalar(0, 0, 255), 2);
-				cv::drawContours(handLayer2, contoursL1, it->first, cv::Scalar(0, 0, 255), 2);
-				ignore = true;
+			if (d >= MIN_DIST_12) {
+				/*cv::circle(handLayer2, fingerL2Point[i], 6, cv::Scalar(0, 0, 255), 2);
+				cv::drawContours(handLayer2, contoursL1, it->first, cv::Scalar(0, 0, 255), 2);*/
+				group.push_back(fingerL2Point[i]);
+				//ignore = true;
 				break;
 			}
 		}
-		if (ignore)
-			break;
+		/*if (ignore)
+			continue;*/
 
-		for (int i = 0; i < group.size(); i++) {
+		/*for (int i = 0; i < group.size(); i++) {
 			cv::Point corner = group[i];
 			for (int j = 0; j < fingerL2Point.size(); j++) {
 				cv::Point finger = fingerL2Point[j];
-				double dist = sqrt(pow(corner.x - finger.x, 2) + pow(corner.y - finger.y, 2));
+				double dist = calDistance(finger, corner);
 				if (dist < DISTANCE_THESHOLD) {
 					ignore = true;
 				}
@@ -501,12 +575,18 @@ void Application::evaluateLayer12()
 			}
 		}
 
-		fingerL1Point.push_back(group[farthestIndex]);
+		fingerL1Point.push_back(group[farthestIndex]);*/
 	}
 
-	for (int i = 0; i < fingerL1Point.size(); i++) {
-		cv::circle(handLayer2, fingerL1Point[i], 4, cv::Scalar(0, 0, 255), 2);
+	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
+		vector<cv::Point> points = it->second;
+		for (int i = 0; i < points.size(); i++) {
+			cv::circle(handLayer2, points[i], 2, cv::Scalar(0, 0, 255), -1);
+		}
 	}
+	/*for (int i = 0; i < fingerL1Point.size(); i++) {
+		cv::circle(handLayer2, fingerL1Point[i], 4, cv::Scalar(0, 0, 255), 2);
+	} */
 }
 
 void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh)
@@ -518,7 +598,7 @@ void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>&
 		distMat[i] = vector<double>(inputArray.size());
 		for (int j = i + 1; j < distMat[i].size(); j++) {
 			cv::Point pj = inputArray[j];
-			distMat[i][j] = sqrt(pow(pi.x - pj.x, 2) + pow(pi.y - pj.y, 2));
+			distMat[i][j] = calDistance(pi, pj);
 		}
 	}
 
@@ -567,6 +647,12 @@ void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>&
 		outputArray.push_back(pi);
 	}
 
+}
+
+double Application::calDistance(cv::Point p1, cv::Point p2)
+{
+	double d = sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2));
+	return d;
 }
 
 void Application::captureFrame()
