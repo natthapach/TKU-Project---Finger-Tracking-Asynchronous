@@ -3,6 +3,7 @@
 #include "KinectReader.h"
 #include "opencv2/opencv.hpp"
 #include "OpenCVThreadFactory.h"
+#include <algorithm>
 
 using namespace std;
 
@@ -62,7 +63,7 @@ void Application::start()
 			/*evaluateHandLayer1();
 			evaluateHandLater2();*/
 			int b = 0;
-			buildEdgeColorT.join();
+			buildEdgeColorT.join();		
 
 			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
 			cv::imshow(WINDOW_MASK_L2, handLayer2);
@@ -388,14 +389,14 @@ void Application::evaluateHandLayer2()	// 7ms
 	for (int i = 0; i < defect.size(); i++) {
 		cv::Vec4i v = defect[i];
 		int depth = v[3];
-		if (depth > 2000) {
+		if (depth > CONVEX_DEPTH_THRESHOLD_LAYER_2) {
 			cv::Point startPoint = contours[largestIndex][v[0]];
 			cv::Point endPoint = contours[largestIndex][v[1]];
 			cv::Point farPoint = contours[largestIndex][v[2]];
 
 			double ms = ((double)(startPoint.y - farPoint.y)) / (startPoint.x - farPoint.x);
 			double me = ((double)(endPoint.y - farPoint.y)) / (endPoint.x - farPoint.x);
-			double angle = atan((me - ms) / (1 + (ms * me))) * (180 / 3.14159265);
+			double angle = atan((me - ms) / (1 + (ms * me))) * (180 / PI);
 
 			if (angle < 0) {
 				semi_fingerPoint.push_back(startPoint);
@@ -404,6 +405,7 @@ void Application::evaluateHandLayer2()	// 7ms
 				cv::circle(handLayer2, farPoint, 4, cv::Scalar(255, 255, 0), 2);
 				/*cv::circle(handLayer2, startPoint, 2, cv::Scalar(0, 255, 0), 1);
 				cv::circle(handLayer2, endPoint, 2, cv::Scalar(0, 255, 0), 1);*/
+				cout << "depth abyss " << depth << endl;
 			}
 		}
 	}
@@ -449,27 +451,37 @@ void Application::evaluateHandLayer2()	// 7ms
 	if (maxAbyssIndex2 != -1)
 		cv::circle(handLayer2, abyss_finger[maxAbyssIndex2], 4, cv::Scalar(255, 0, 255), -1);
 
+	handBounder.clear();
 	
 	for (int i = 0; i < abyss_finger.size(); i++) {
 		int k = (maxAbyssIndex1 + i) % abyss_finger.size();
 		int j = (maxAbyssIndex1 + i + 1) % abyss_finger.size();
-		
-		if ((k == maxAbyssIndex1 && j == maxAbyssIndex2) || (k == maxAbyssIndex2 && j == maxAbyssIndex1))
+
+		handBounder.push_back(abyss_finger[i]);
+
+		if (abyss_finger.size() > 2 && ((k == maxAbyssIndex1 && j == maxAbyssIndex2) || (k == maxAbyssIndex2 && j == maxAbyssIndex1)))
 			continue;
 		cv::Point pk = abyss_finger[k];
 		cv::Point pj = abyss_finger[j];
-		cv::Point p, q, pp;
+		cv::Point p, q, pp, qq;
 
+		int p_index = 0;
+		int q_index = 0;
+		
 		if (k == maxAbyssIndex1 || k == maxAbyssIndex2) {
 			p = pk;
 			q = pj;
+			p_index = k;
+			q_index = j;
 		}
 		else if (j == maxAbyssIndex1 || j == maxAbyssIndex2) {
 			p = pj;
 			q = pk;
+			p_index = j;
+			p_index = k;
 		}
 		else {
-			cv::line(handLayer2Copy, pk, pj, cv::Scalar(0, 0, 0), 5);
+			cv::line(handLayer2Copy, pk, pj, cv::Scalar(0, 0, 0), 2);
 			continue;
 		}			
 
@@ -477,19 +489,71 @@ void Application::evaluateHandLayer2()	// 7ms
 		double dy = p.y - q.y;
 
 		int MOVE_DISTANCE = 100;
+		if (abyss_finger.size() == 2) {
+			if (dx > 0) {
+				if (dy != 0) {
+					pp.x = 640;
+					pp.y = 640 * (dy / dx) - (dy / dx) * p.x + p.y;
+					qq.x = 0;
+					qq.y = qq.y - (dy / dx) * qq.x;
+				}
+				else {
+					pp.x = 640;
+					pp.y = p.y;
+					qq.x = 0;
+					qq.y = q.y;
+				}
+			}
+			else if (dx < 0) {
+				if (dy != 0) {
+					pp.x = 0;
+					pp.y = p.y - (dy / dx) * p.x;
+					qq.x = 640;
+					qq.y = 640 * (dy / dx) - (dy / dx)*q.x + q.y;
+				}
+				else {
+					pp.x = 0;
+					pp.y = p.y;
+					qq.x = 640;
+					qq.y = q.y;
+				}
+			}
+			else {
+				if (dy > 0) {
+					pp.x = p.x;
+					pp.y = 0;
+					qq.x = q.x;
+					qq.y = 480;
+				}
+				else {
+					pp.x = p.x;
+					pp.y = 480;
+					qq.x = q.x;
+					qq.y = 0;
+				}
+			}
+
+			handBounder.push_back(pp);
+			handBounder.push_back(qq);
+
+			cv::line(handLayer2Copy, pp, qq, cv::Scalar(0, 0, 0), 2);
+			cv::line(handLayer2, pp, qq, cv::Scalar(255, 0, 0), 5);
+			break;
+		}
+
 		if (dx > 0) {
-			pp.x = p.x + MOVE_DISTANCE;
+			pp.x = 640;
 			if (dy != 0) {
-				pp.y = p.y + MOVE_DISTANCE * (dy / dx);
+				pp.y = 640 * (dy / dx) - (dy / dx) * p.x + p.y;
 			}
 			else {
 				pp.y = p.y;
 			}
 		}
 		else if (dx < 0) {
-			pp.x = p.x - MOVE_DISTANCE;
+			pp.x = 0;
 			if (dy != 0) {
-				pp.y = p.y - MOVE_DISTANCE * (dy / dx);
+				pp.y = p.y - p.x * (dy / dx);
 			}
 			else {
 				pp.y = p.y;
@@ -498,14 +562,28 @@ void Application::evaluateHandLayer2()	// 7ms
 		else {
 			pp.x = p.x;
 			if (dy > 0) {
-				pp.y = p.y + MOVE_DISTANCE;
+				pp.y = 480;
 			}
 			else {
-				pp.y = p.y - MOVE_DISTANCE;
+				pp.y = 0;
 			}
 		}
-		cv::line(handLayer2Copy, pp, q, cv::Scalar(0, 0, 0), 5);
+
+		handBounder.push_back(pp);
+
+		cv::line(handLayer2Copy, pp, q, cv::Scalar(0, 0, 0), 2);
+		cv::line(handLayer2, pp, q, cv::Scalar(255, 0, 0), 5);
 	}
+	handBounder.push_back(cv::Point(0, 480));
+	handBounder.push_back(cv::Point(640, 480));
+
+	cv::Point centroidHandConvex = calCentroid(handBounder);
+	ConvexSorter handConvexSorter;
+	handConvexSorter.origin = centroidHandConvex;
+	sort(handBounder.begin(), handBounder.end(), handConvexSorter);
+
+	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
+	cv::drawContours(handLayer3, vector<vector<cv::Point>> { handBounder }, 0, cv::Scalar(0, 255, 255), 3);
 
 	vector<vector<cv::Point>> contoursCopy;
 	vector<cv::Vec4i> hierachyCopy;
@@ -580,10 +658,75 @@ void Application::evaluateLayer12()
 
 	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
 		vector<cv::Point> points = it->second;
+		cv::Point centroid = calCentroid(points);
+		ConvexSorter sorter;
+		sorter.origin = centroid;
+		sort(points.begin(), points.end(), sorter);
 		for (int i = 0; i < points.size(); i++) {
-			cv::circle(handLayer2, points[i], 2, cv::Scalar(0, 0, 255), -1);
+			cv::Point pi = points[i];
+			cv::Point pj = points[(i + 1) % points.size()];
+			cv::circle(handLayer2, pi, 2, cv::Scalar(0, 0, 255), -1);
+			cv::line(handLayer2, pi, pj, cv::Scalar(0, 0, 255), 1);
 		}
 	}
+	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
+		if (handBounder.size() == 0)
+			break;
+
+		vector<cv::Point> points = it->second;
+		bool isInside = false;
+		double minDist = 1000000;
+		double maxDist = -1000000;
+		int minIndex = -1;
+		int maxIndex = -1;
+		for (int i = 0; i < points.size(); i++) {
+			double d = cv::pointPolygonTest(handBounder, points[i], true);
+
+			if (d >= 0)
+				isInside = true;
+			if (d > maxDist) {
+				maxDist = d;
+				maxIndex = i;
+			}
+			if (d < minDist) {
+				minDist = d;
+				minIndex = i;
+			}
+		}
+
+		if (isInside) {
+			cv::circle(handLayer2, points[maxIndex], 4, cv::Scalar(0, 255, 255), 2);
+		}
+		else {
+			cv::circle(handLayer2, points[minIndex], 4, cv::Scalar(0, 255, 255), 2);
+		}
+	}
+	/*for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
+		vector<cv::Point> points = it->second;
+		if (points.size() == 1) {
+			cv::circle(handLayer2, points[0], 4, cv::Scalar(0, 255, 255), 2);
+		}
+		else if (points.size() == 2) {
+
+		}
+		else {
+			double minDegree = 360;
+			int minIndex = -1;
+			for (int i = 0; i < points.size(); i++) {
+				cv::Point ph = points[(i - 1) % points.size()];
+				cv::Point pi = points[i];
+				cv::Point pj = points[(i + 1) % points.size()];
+
+				double angle = abs(calAngle(ph, pi, pj));
+				if (angle < minDegree) {
+					minDegree = angle;
+					minIndex = i;
+				}
+			}
+
+			cv::circle(handLayer2, points[minIndex], 4, cv::Scalar(0, 255, 255), 2);
+		}
+	}*/
 	/*for (int i = 0; i < fingerL1Point.size(); i++) {
 		cv::circle(handLayer2, fingerL1Point[i], 4, cv::Scalar(0, 0, 255), 2);
 	} */
@@ -653,6 +796,29 @@ double Application::calDistance(cv::Point p1, cv::Point p2)
 {
 	double d = sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2));
 	return d;
+}
+
+cv::Point Application::calCentroid(vector<cv::Point> points)
+{
+	double sum_x = 0;
+	double sum_y = 0;
+	int count = 0;
+	for (int i = 0; i < points.size(); i++) {
+		sum_x += points[i].x;
+		sum_y += points[i].y;
+		count += 1;
+	}
+	if (count == 0) 
+		return cv::Point();
+	return cv::Point(sum_x / count, sum_y / count);
+}
+
+double Application::calAngle(cv::Point ph, cv::Point pi, cv::Point pj)
+{
+	double ms = ((double)(ph.y - pi.y)) / (ph.x - pi.x);
+	double me = ((double)(pj.y - pi.y)) / (pj.x - pi.x);
+	double angle = atan((me - ms) / (1 + (ms * me))) * (180 / PI);
+	return angle;
 }
 
 void Application::captureFrame()
