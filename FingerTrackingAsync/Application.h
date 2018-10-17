@@ -28,6 +28,8 @@ protected :
 	const int DISTANCE_THRESHOLD_CORNER_LAYER_1 = 3;
 	/* Threshold for ignore contours on hand layer 1 */
 	const double AREA_CONTOUR_THRESHOLD = 15;
+	/* Threshold for select corner pixel on hand layer 1 */
+	const int CORNER_THRESHOLD = 130;
 
 	/* Minimum distance for merge finger layer 2 to contour layer 1 */
 	const int MIN_DIST_12 = -4;
