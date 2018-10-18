@@ -55,8 +55,9 @@ int KinectReader::initialize()
 	if (statusNi != openni::STATUS_OK)
 		return 1;
 
-	//statusNi = device.setImageRegistrationMode(openni::IMAGE_REGISTRATION_DEPTH_TO_COLOR);
-
+	/*statusNi = device.setDepthColorSyncEnabled(true);
+	statusNi = device.setImageRegistrationMode(openni::IMAGE_REGISTRATION_DEPTH_TO_COLOR);
+*/
 	return 0;
 }
 

@@ -63,11 +63,13 @@ protected :
 	vector<cv::Point> fingerL2Point;
 	vector<cv::Point> hullL2;
 	vector<cv::Point> handBounder;
+	vector<cv::Point> fingerPointL12;
 
 	cv::MatND hist;
 	
 
 	void transformColorFrame();
+	void transformDepthFrame();
 	void buildEdgeColor();
 	void buildSkinMask();
 	void buildDepthHandMask();
@@ -85,6 +87,10 @@ protected :
 	double calDistance(cv::Point p1, cv::Point p2);
 	cv::Point calCentroid(vector<cv::Point> points);
 	double calAngle(cv::Point ph, cv::Point pi, cv::Point pj);
+	cv::Vec2d calLinear(cv::Point p1, cv::Point p2);
+	cv::Point calInterceptPoint(cv::Vec2d l1, cv::Vec2d l2);
+	cv::Vec2d calPerpendicularLine(cv::Vec2d l, cv::Point p);
+	void calEndpoint(cv::Vec2d l, cv::Point &p1, cv::Point &p2);
 
 	void captureFrame();
 private:
