@@ -488,7 +488,7 @@ void Application::evaluateHandLayer2()	// 7ms
 		cv::circle(handLayer2, abyss_finger[maxAbyssIndex2], 4, cv::Scalar(255, 0, 255), -1);
 
 	handBounder.clear();
-	
+	vector<cv::Vec2d> abyssLines;
 	for (int i = 0; i < abyss_finger.size(); i++) {
 		int k = (maxAbyssIndex1 + i) % abyss_finger.size();
 		int j = (maxAbyssIndex1 + i + 1) % abyss_finger.size();
@@ -500,6 +500,9 @@ void Application::evaluateHandLayer2()	// 7ms
 		cv::Point pk = abyss_finger[k];
 		cv::Point pj = abyss_finger[j];
 		cv::Point p, q, pp, qq;
+		
+		cv::Vec2d line = calLinear(pk, pj);
+		abyssLines.push_back(line);
 
 		int p_index = 0;
 		int q_index = 0;
@@ -616,8 +619,13 @@ void Application::evaluateHandLayer2()	// 7ms
 	cv::Point centroidHandConvex = calCentroid(handBounder);
 	ConvexSorter handConvexSorter;
 	handConvexSorter.origin = centroidHandConvex;
-	sort(handBounder.begin(), handBounder.end(), handConvexSorter);
+	std::sort(handBounder.begin(), handBounder.end(), handConvexSorter);
 
+	for (int i = 0; i < abyssLines.size(); i++) {
+		cv::Point p1, p2;
+		calEndpoint(abyssLines[i], p1, p2);
+		cv::line(handLayer3, p1, p2, cv::Scalar(255, 0, 0), 2);
+	}
 	/*cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
 	cv::drawContours(handLayer3, vector<vector<cv::Point>> { handBounder }, 0, cv::Scalar(0, 255, 255), 3);*/
 
@@ -1016,6 +1024,13 @@ void Application::calEndpoint(cv::Vec2d l, cv::Point & p1, cv::Point & p2)
 		p2.x = 640;
 		p2.y = 640 * m + c;
 	}
+}
+
+cv::Point Application::calCenterPoint(cv::Point p1, cv::Point p2)
+{
+	int x = (p1.x + p2.x) / 2;
+	int y = (p1.y + p2.y) / 2;
+	return cv::Point(x, y);
 }
 
 void Application::captureFrame()
