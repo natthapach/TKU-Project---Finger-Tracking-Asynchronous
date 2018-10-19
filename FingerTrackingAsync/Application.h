@@ -91,7 +91,7 @@ protected :
 	cv::Point calInterceptPoint(cv::Vec2d l1, cv::Vec2d l2);
 	cv::Vec2d calPerpendicularLine(cv::Vec2d l, cv::Point p);
 	void calEndpoint(cv::Vec2d l, cv::Point &p1, cv::Point &p2);
-	cv::Point calCenterPoint(cv::Point p1, cv::Point p2);
+	cv::Point calMedianPoint(cv::Point p1, cv::Point p2);
 
 	void captureFrame();
 private:

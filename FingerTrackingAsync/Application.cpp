@@ -51,6 +51,20 @@ void Application::start()
 			thread buildHand3LayersT = thread(&Application::buildHand3Layers, this);
 			buildHand3LayersT.join(); //10
 
+			buildEdgeColorT.join();
+
+			/*cv::Mat dilatedHandMask;
+			cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(9, 9));
+			cv::Mat kernel2 = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
+			cv::dilate(handMask, dilatedHandMask, kernel);
+			cv::dilate(edgeColorFrame, edgeColorFrame, kernel2);
+			cv::erode(edgeColorFrame, edgeColorFrame, kernel2);
+			cv::bitwise_and(handMask, edgeColorFrame, edgeColorFrame);
+			cv::bitwise_not(edgeColorFrame, edgeColorFrame);
+
+			cv::bitwise_and(edgeColorFrame, handLayer3, handLayer3);
+			cv::bitwise_and(edgeColorFrame, handLayer1, handLayer1);*/
+
 			//buildHistogram();
 			//buildRawHandHistogram();
 			int a = 0;
@@ -66,22 +80,7 @@ void Application::start()
 			/*evaluateHandLayer1();
 			evaluateHandLater2();*/
 			int b = 0;
-			buildEdgeColorT.join();		
-
-			/*cv::Mat handMask16U, rawHand;
-			cv::normalize(handMask, handMask16U, 0, 65535, cv::NORM_MINMAX, CV_16UC1);
-			cv::bitwise_and(rawDepthFrame, handMask16U, rawHand);
-			cv::normalize(rawHand, rawHand, 0, 255, cv::NORM_MINMAX, CV_8UC1);
-			cv::imshow("Raw Hand", rawHand);*/
-
-			vector<vector<cv::Point>> handContours;
-			vector<cv::Vec4i> hierachy;
-			cv::findContours(handMask, handContours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
-			cv::cvtColor(edgeColorFrame, edgeColorFrame, cv::COLOR_GRAY2BGR);
-			for (int i = 0; i < handContours.size(); i++) {
-				cv::drawContours(edgeColorFrame, handContours, i, cv::Scalar(0, 0, 255), 1);
-			}
-
+				
 			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
 			cv::imshow(WINDOW_MASK_L2, handLayer2);
 			cv::imshow(WINDOW_MASK_L3, handLayer3);
@@ -147,7 +146,7 @@ void Application::buildEdgeColor()	// ~45ms
 	cv::Mat gray;
 	cv::cvtColor(colorFrame, gray, cv::COLOR_BGR2GRAY);
 	//cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0);
-	cv::Canny(gray, edgeColorFrame, 70, 150, 3);
+	cv::Canny(gray, edgeColorFrame, 50, 150, 3);
 	//cv::dilate(edgeColorFrame, edgeColorFrame, cv::Mat());
 	//cv::bitwise_not(edgeColorFrame, edgeColorFrame);
 	//cv::floodFill(edgeColorFrame, cv::Point(handPosX, handPosY), cv::Scalar(128));
@@ -447,22 +446,16 @@ void Application::evaluateHandLayer2()	// 7ms
 	}
 	
 	clusterPoint(semi_fingerPoint, fingerL2Point, DISTANCE_THESHOLD);
-	double sum_x = 0;
-	double sum_y = 0;
 	int count = 0;
 	for (int i = 0; i < fingerL2Point.size(); i++) {
 		cv::circle(handLayer2, fingerL2Point[i], 4, cv::Scalar(0, 255, 0), 2);
-		sum_x += fingerL2Point[i].x;
-		sum_y += fingerL2Point[i].y;
 		count += 1;
 	}
 	if (count == 0)
 		return;
 
 	// find finger centroid point
-	cv::Point fingerCentroid;
-	fingerCentroid.x = sum_x / count;
-	fingerCentroid.y = sum_y / count;
+	cv::Point fingerCentroid = calCentroid(fingerL2Point);
 	cv::circle(handLayer2, fingerCentroid, 4, cv::Scalar(100, 255, 100), -1);
 
 	double maxAbyssDist1 = 0;
@@ -487,8 +480,9 @@ void Application::evaluateHandLayer2()	// 7ms
 	if (maxAbyssIndex2 != -1)
 		cv::circle(handLayer2, abyss_finger[maxAbyssIndex2], 4, cv::Scalar(255, 0, 255), -1);
 
+	// find hand bounder
 	handBounder.clear();
-	vector<cv::Vec2d> abyssLines;
+	
 	for (int i = 0; i < abyss_finger.size(); i++) {
 		int k = (maxAbyssIndex1 + i) % abyss_finger.size();
 		int j = (maxAbyssIndex1 + i + 1) % abyss_finger.size();
@@ -500,9 +494,6 @@ void Application::evaluateHandLayer2()	// 7ms
 		cv::Point pk = abyss_finger[k];
 		cv::Point pj = abyss_finger[j];
 		cv::Point p, q, pp, qq;
-		
-		cv::Vec2d line = calLinear(pk, pj);
-		abyssLines.push_back(line);
 
 		int p_index = 0;
 		int q_index = 0;
@@ -611,7 +602,7 @@ void Application::evaluateHandLayer2()	// 7ms
 		handBounder.push_back(pp);
 
 		cv::line(handLayer2Copy, pp, q, cv::Scalar(0, 0, 0), 2);
-		cv::line(handLayer2, pp, q, cv::Scalar(255, 0, 0), 5);
+		//cv::line(handLayer2, pp, q, cv::Scalar(255, 0, 0), 5);
 	}
 	handBounder.push_back(cv::Point(0, 480));
 	handBounder.push_back(cv::Point(640, 480));
@@ -620,12 +611,84 @@ void Application::evaluateHandLayer2()	// 7ms
 	ConvexSorter handConvexSorter;
 	handConvexSorter.origin = centroidHandConvex;
 	std::sort(handBounder.begin(), handBounder.end(), handConvexSorter);
-
-	for (int i = 0; i < abyssLines.size(); i++) {
-		cv::Point p1, p2;
-		calEndpoint(abyssLines[i], p1, p2);
-		cv::line(handLayer3, p1, p2, cv::Scalar(255, 0, 0), 2);
+	
+	// abyss perpendicular
+	vector<cv::Vec2d> abyssLines;
+	vector<cv::Point> abyssLineMedians;
+	if (abyss_finger.size() == 4 || abyss_finger.size() == 3) {
+		cv::Point anchor1 = abyss_finger[maxAbyssIndex1];
+		cv::Point anchor2 = abyss_finger[maxAbyssIndex2];
+		vector<cv::Point> intercepts;
+		for (int i = 0; i < abyss_finger.size(); i++) {
+			if (i == maxAbyssIndex1 || i == maxAbyssIndex2)
+				continue;
+			cv::Point pi = abyss_finger[i];
+			cv::Vec2d l1 = calLinear(anchor1, pi);
+			cv::Vec2d l2 = calLinear(anchor2, pi);
+			cv::Point median1 = calMedianPoint(anchor1, pi);
+			cv::Point median2 = calMedianPoint(anchor2, pi);
+			cv::Vec2d perpend1 = calPerpendicularLine(l1, median1);
+			cv::Vec2d perpend2 = calPerpendicularLine(l2, median2);
+			cv::Point intercept = calInterceptPoint(perpend1, perpend2);
+			
+			cv::Point p1, p2, p3, p4;
+			calEndpoint(l1, p1, p2);
+			calEndpoint(l2, p3, p4);
+			cv::line(handLayer2, p1, p2, cv::Scalar(255, 0, 0), 2);
+			cv::line(handLayer2, p3, p4, cv::Scalar(255, 0, 0), 2);
+			cv::circle(handLayer2, intercept, 10, cv::Scalar(255, 0, 255), 2);
+			intercepts.push_back(intercept);
+		}
+		cv::Point handCentroid = calCentroid(intercepts);
+		// find max distance between abyss and centroid to create redius
+		double d_sum = 0;
+		for (int i = 0; i < abyss_finger.size(); i++) {
+			double d = calDistance(handCentroid, abyss_finger[i]);
+			d_sum += d;
+		}
+		double r = d_sum / abyss_finger.size();
+		cv::circle(handLayer2, handCentroid, r, cv::Scalar(0, 102, 255), 2);
 	}
+	else if (abyss_finger.size() == 2) {
+
+	}
+	else {
+
+	}
+	/*for (int i = 0; i < abyss_finger.size(); i++) {
+		int k = (maxAbyssIndex1 + i) % abyss_finger.size();
+		int j = (maxAbyssIndex1 + i + 1) % abyss_finger.size();
+
+		if (abyss_finger.size() > 2 && ((k == maxAbyssIndex1 && j == maxAbyssIndex2) || (k == maxAbyssIndex2 && j == maxAbyssIndex1)))
+			continue;
+		cv::Point pk = abyss_finger[k];
+		cv::Point pj = abyss_finger[j];
+
+		cv::Vec2d line = calLinear(pk, pj);
+		abyssLines.push_back(line);
+		cv::Point medianPoint = calMedianPoint(pk, pj);
+		abyssLineMedians.push_back(medianPoint);
+	}
+	vector<cv::Vec2d> abyssLinePerpendicular(abyssLines.size());
+	vector<cv::Point> abyssLinePerpendicularIntercept(abyssLines.size());
+	for (int i = 0; i < abyssLines.size(); i++) {
+		abyssLinePerpendicular[i] = calPerpendicularLine(abyssLines[i], abyssLineMedians[i]);
+
+		cv::Point p1, p2, p3, p4;
+		calEndpoint(abyssLines[i], p1, p2);
+		calEndpoint(abyssLinePerpendicular[i], p3, p4);
+
+		cv::line(handLayer2, p1, p2, cv::Scalar(255, 0, 0), 2);
+		cv::line(handLayer2, p3, p4, cv::Scalar(0, 0, 255), 2);
+		cv::circle(handLayer2, abyssLineMedians[i], 2, cv::Scalar(255, 0, 255), -1);
+	}
+	for (int i = 0; i < abyssLinePerpendicular.size(); i++) {
+		cv::Vec2d li = abyssLinePerpendicular[i];
+		cv::Vec2d lj = abyssLinePerpendicular[(i+1) % abyssLinePerpendicular.size()];
+
+		abyssLinePerpendicularIntercept[i] = calInterceptPoint(li, lj);
+		cv::circle(handLayer2, abyssLinePerpendicularIntercept[i], 10, cv::Scalar(255, 0, 255), 2);
+	}*/
 	/*cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
 	cv::drawContours(handLayer3, vector<vector<cv::Point>> { handBounder }, 0, cv::Scalar(0, 255, 255), 3);*/
 
@@ -643,9 +706,9 @@ void Application::evaluateHandLayer2()	// 7ms
 		}
 	}
 
-	if (largestIndexCopy != -1) {
+	/*if (largestIndexCopy != -1) {
 		cv::drawContours(handLayer2, contoursCopy, largestIndexCopy, cv::Scalar(128, 128, 128), -1);
-	}
+	}*/
 }
 
 void Application::evaluateHandLayer3()
@@ -734,7 +797,8 @@ void Application::evaluateLayer12()
 		fingerL1PointMultiple.push_back(group[farthestIndexM]);
 	}
 
-	cv::drawContours(handLayer2, vector<vector<cv::Point>> {hullL2}, 0, cv::Scalar(0, 255, 0), 1);
+	if (hullL2.size() != 0)
+		cv::drawContours(handLayer2, vector<vector<cv::Point>> {hullL2}, 0, cv::Scalar(0, 255, 0), 1);
 
 	/*for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
 		vector<cv::Point> points = it->second;
@@ -962,7 +1026,10 @@ cv::Point Application::calInterceptPoint(cv::Vec2d l1, cv::Vec2d l2)
 	int x, y;
 
 	/* paralell never cross together */
-	assert(m1 != m2);
+	//assert(m1 != m2);
+	if (m1 == m2) {
+		return cv::Point(INT_MAX, INT_MAX);
+	}
 
 	if (m1 == HUGE_VAL) {
 		x = -c1;
@@ -993,17 +1060,17 @@ cv::Vec2d Application::calPerpendicularLine(cv::Vec2d l, cv::Point p)
 	double c = l[1];
 
 	if (m == HUGE_VAL) {
-		assert(p.x == -c);
+		//assert(p.x == -c);
 		return cv::Vec2d(0, p.y);
 	}
 	else if (m == 0) {
-		assert(p.y == c);
+		//assert(p.y == c);
 		return cv::Vec2d(HUGE_VAL, -p.x);
 	}
 	else {
-		assert(p.y == (int) (m * p.x + c));
-		double m2 = 1 / m;
-		double c2 = p.y - (p.x / m);
+		//assert(p.y == (int) (m * p.x + c));
+		double m2 = -1 / m;
+		double c2 = p.y + (p.x / m);
 		return cv::Vec2d(m2, c2);
 	}
 }
@@ -1026,7 +1093,7 @@ void Application::calEndpoint(cv::Vec2d l, cv::Point & p1, cv::Point & p2)
 	}
 }
 
-cv::Point Application::calCenterPoint(cv::Point p1, cv::Point p2)
+cv::Point Application::calMedianPoint(cv::Point p1, cv::Point p2)
 {
 	int x = (p1.x + p2.x) / 2;
 	int y = (p1.y + p2.y) / 2;
