@@ -100,7 +100,7 @@ cv::Mat KinectReader::getRawDepthFrame()
 
 bool KinectReader::isHandTracking()
 {
-	return numberOfHands > 0;
+	return numberOfHands > 0 && handDepth > 0;
 }
 
 float KinectReader::getHandPosX()
@@ -121,6 +121,26 @@ int KinectReader::getHandDepth()
 int KinectReader::getDepthHandRange()
 {
 	return RANGE;
+}
+
+cv::Point KinectReader::getHandPoint()
+{
+	return cv::Point(handPosX, handPosY);
+}
+
+int KinectReader::getHandRadius(int mm)
+{
+	if (!isHandTracking())
+		return 0;
+	float handWorldX, handWorldY, handWorldZ;
+	openni::CoordinateConverter::convertDepthToWorld(depthStream, handPosX, handPosY, handDepth, &handWorldX, &handWorldY, &handWorldZ);
+	handWorldY -= mm;
+	float radiusX, radiusY, radiusZ;
+	openni::CoordinateConverter::convertWorldToDepth(depthStream, handWorldX, handWorldY, handWorldZ, &radiusX, &radiusY, &radiusZ);
+	int radius = (int) abs(radiusY - handPosY);
+	if (radius < 0)
+		return 0;
+	return radius;
 }
 
 void KinectReader::asyncReadRGBFrame()

@@ -21,6 +21,9 @@ public :
 	float getHandPosY();
 	int getHandDepth();
 	int getDepthHandRange();
+	cv::Point getHandPoint();
+	int getHandRadius(int mm);
+
 protected :
 	const int RANGE = 100;
 	openni::Device device;

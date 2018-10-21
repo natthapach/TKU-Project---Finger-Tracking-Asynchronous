@@ -75,6 +75,7 @@ void Application::start()
 			evaluateHandLater2T.join();
 			evaluateHandLayer1T.join();
 
+			evaluateHandLayer3();
 			evaluateLayer12();
 
 			/*evaluateHandLayer1();
@@ -714,7 +715,40 @@ void Application::evaluateHandLayer2()	// 7ms
 void Application::evaluateHandLayer3()
 {
 	// TODO : perform on layer 3
+	vector<cv::Vec4i> hieracry;
+	vector<vector<cv::Point>> contours;
+	cv::findContours(handLayer3, contours, hieracry, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 	
+	if (contours.size() == 0)
+		return;
+	
+	double largestArea = 0;
+	int largestIndex = 0;
+	for (int i = 0; i < contours.size(); i++) {
+		double a = cv::contourArea(contours[i]);
+		if (a > largestArea) {
+			largestArea = a;
+			largestIndex = i;
+		}
+	}
+
+	vector<cv::Point> largestContour = contours[largestIndex];
+	cv::Rect boundingBox = cv::boundingRect(largestContour);
+	cv::RotatedRect minAreaBox = cv::minAreaRect(largestContour);
+	cv::Point2f vertices2f[4];
+	minAreaBox.points(vertices2f);
+
+	
+
+	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
+	int radius = kinectReader.getHandRadius(50);
+	cv::Point handPoint = kinectReader.getHandPoint();
+	cv::circle(handLayer3, handPoint, radius, cv::Scalar(0, 102, 255), 2);
+	
+	cv::rectangle(handLayer3, boundingBox, cv::Scalar(0, 255, 0), 2);
+	for (int i = 0; i < 4; i++) {
+		cv::line(handLayer3, vertices2f[i], vertices2f[(i + 1) % 4], cv::Scalar(255, 255, 0), 2);
+	}
 }
 
 void Application::evaluateLayer12()
@@ -904,7 +938,7 @@ void Application::evaluateLayer12()
 		cv::circle(handLayer2, fingerL1PointMultiple[i], 4, cv::Scalar(255, 0, 255), 2);
 	} */
 
-	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
+	
 	for (int i = 0; i < fingerPointL12.size(); i++) {
 		cv::circle(handLayer3, fingerPointL12[i], 4, cv::Scalar(0, 0, 255), 2);
 	}
