@@ -92,6 +92,10 @@ protected :
 	cv::Vec2d calPerpendicularLine(cv::Vec2d l, cv::Point p);
 	void calEndpoint(cv::Vec2d l, cv::Point &p1, cv::Point &p2);
 	cv::Point calMedianPoint(cv::Point p1, cv::Point p2);
+	cv::Point calRatioPoint(cv::Point p1, cv::Point p2, double ratio1, double ratio2);
+	cv::Point calLinearPointByX(cv::Vec2d L, double x);
+	cv::Point calLinearPointByY(cv::Vec2d L, double y);
+	void calLinearInterceptCirclePoint(cv::Point center, double radius, cv::Vec2d linear, cv::Point &p_out1, cv::Point &p_out2);
 
 	void captureFrame();
 private:

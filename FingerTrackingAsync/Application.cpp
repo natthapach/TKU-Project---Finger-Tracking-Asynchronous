@@ -733,22 +733,115 @@ void Application::evaluateHandLayer3()
 	}
 
 	vector<cv::Point> largestContour = contours[largestIndex];
+
+	int heightestY = 480;
+	int heightestIndex = -1;
+	for (int i = 0; i < largestContour.size(); i++) {
+		if (largestContour[i].y <= heightestY) {
+			heightestY = largestContour[i].y;
+			heightestIndex = i;
+		}
+	}
+	if (heightestIndex == -1)
+		return;
+	cv::Point heightestPoint = largestContour[heightestIndex];
 	cv::Rect boundingBox = cv::boundingRect(largestContour);
 	cv::RotatedRect minAreaBox = cv::minAreaRect(largestContour);
 	cv::Point2f vertices2f[4];
 	minAreaBox.points(vertices2f);
 
+	cv::Point boundingBoxTopMedian = calMedianPoint(cv::Point(boundingBox.x, boundingBox.y), cv::Point(boundingBox.x + boundingBox.width, boundingBox.y));
+
+	int radius = kinectReader.getHandRadius(50);
+	cv::Point handPoint = kinectReader.getHandPoint();	// P2
+
+	cv::Vec2d boundingToHandLine = calLinear(boundingBoxTopMedian, handPoint);	// L
+	cv::Point bhl_p1, bhl_p2;
+	calEndpoint(boundingToHandLine, bhl_p1, bhl_p2);
+
+	cv::Vec2d heightestToHandLine = calLinear(heightestPoint, handPoint);
+	cv::Point hhl_p1, hhl_p2;
+	calEndpoint(heightestToHandLine, hhl_p1, hhl_p2);
+
+	double distTopHand = calDistance(handPoint, boundingBoxTopMedian);
+	double distHandPalm = 2 * distTopHand - 80;
+	double distHeightestPalm = 2 * distTopHand - 80;
+
+	// rename to famula
+	/*cv::Point p2 = handPoint;
+	cv::Point p3 = boundingBoxTopMedian;
+	cv::Vec2d L = boundingToHandLine;
+	double m = L[0];
+	double c = L[1];
+	double T = distTopHand;
+	double Q = distHandPalm;
+	double a = pow(m, 2) + 1;
+	double b = (2 * m*c) - (2 * p3.x) - (2 * m*p3.y);
+	double c_2 = pow(p3.x, 2) + pow(c, 2) - (2 * c*p3.y) + p3.y - pow(Q, 2);
+	double inSqrt = b * b - 4 * a*c_2;
+	double p1_px_1 = (-b + sqrt(b*b - 4 * a*c_2)) / (2 * a);
+	double p1_px_2 = (-b - sqrt(b*b - 4 * a*c_2)) / (2 * a);
+	cv::Point p1_1 = calLinearPointByX(L, p1_px_1);
+	cv::Point p1_2 = calLinearPointByX(L, p1_px_2);*/
+
+	/*double r = distHandPalm;
+	double h = handPoint.x;
+	double k = handPoint.y;
+	double m = boundingToHandLine[0];
+	double c = boundingToHandLine[1];
+
+	double a = (m * m) + 1;
+	double b = (2 * m*(c - k)) - 2 * h;
+	double c_2 = ((h*h) + (c - k)*(c - k) - (r*r));
+
+	double p1_x1 = ((-1*b) + sqrt(b*b - (4 * a*c_2))) / (2 * a);
+	double p1_x2 = ((-1*b) - sqrt(b*b - (4 * a*c_2))) / (2 * a);
+
+	cv::Point p1_1 = calLinearPointByX(boundingToHandLine, p1_x1);
+	cv::Point p1_2 = calLinearPointByX(boundingToHandLine, p1_x2);*/
+
+	cv::Point p1_1, p1_2;
+	calLinearInterceptCirclePoint(handPoint, distHandPalm, boundingToHandLine, p1_1, p1_2);
+	cv::Point p4_1, p4_2;
+	calLinearInterceptCirclePoint(handPoint, distHeightestPalm, heightestToHandLine, p4_1, p4_2);
 	
 
+
+	cv::Point palmPoint = cv::Point(0, 0);
+	// draw
 	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
-	int radius = kinectReader.getHandRadius(50);
-	cv::Point handPoint = kinectReader.getHandPoint();
+
+	cv::line(handLayer3, bhl_p1, bhl_p2, cv::Scalar(255, 0, 0), 2);
+
+	cv::circle(handLayer3, heightestPoint, 4, cv::Scalar(255, 0, 255), -1);
+	cv::line(handLayer3, hhl_p1, hhl_p2, cv::Scalar(255, 0, 255), 2);
+
 	cv::circle(handLayer3, handPoint, radius, cv::Scalar(0, 102, 255), 2);
+	if (distHandPalm > 0)
+		cv::circle(handLayer3, handPoint, distHandPalm, cv::Scalar(0, 0, 255), 2);
+	cv::circle(handLayer3, handPoint, 3, cv::Scalar(0, 102, 255), -1);
+	
+	cv::circle(handLayer3, p1_1, radius, cv::Scalar(255, 0, 0), 2);
+	cv::circle(handLayer3, p1_1, 3, cv::Scalar(255, 0, 0), -1);
+
+	cv::circle(handLayer3, p1_2, radius, cv::Scalar(255, 0, 0), 2);
+	cv::circle(handLayer3, p1_2, 3, cv::Scalar(255, 0, 0), -1);
+	
+	cv::circle(handLayer3, p4_1, radius, cv::Scalar(255, 0, 255), 2);
+	cv::circle(handLayer3, p4_1, 3, cv::Scalar(255, 0, 255), -1);
+
+	cv::circle(handLayer3, p4_2, radius, cv::Scalar(255, 0, 255), 2);
+	cv::circle(handLayer3, p4_2, 3, cv::Scalar(255, 0, 255), -1);
+
+	/*cv::circle(handLayer3, palmPoint, radius, cv::Scalar(255, 0, 0), 2);
+	cv::circle(handLayer3, palmPoint, 3, cv::Scalar(255, 0, 0), -1);*/
 	
 	cv::rectangle(handLayer3, boundingBox, cv::Scalar(0, 255, 0), 2);
 	for (int i = 0; i < 4; i++) {
 		cv::line(handLayer3, vertices2f[i], vertices2f[(i + 1) % 4], cv::Scalar(255, 255, 0), 2);
 	}
+
+	cv::circle(handLayer3, boundingBoxTopMedian, 4, cv::Scalar(0, 255, 0), -1);
 }
 
 void Application::evaluateLayer12()
@@ -1132,6 +1225,71 @@ cv::Point Application::calMedianPoint(cv::Point p1, cv::Point p2)
 	int x = (p1.x + p2.x) / 2;
 	int y = (p1.y + p2.y) / 2;
 	return cv::Point(x, y);
+}
+
+cv::Point Application::calRatioPoint(cv::Point p1, cv::Point p2, double ratio1, double ratio2)
+{
+	double px = (ratio2 * p1.x + ratio1 * p2.x) / (ratio1 + ratio2);
+	double py = (ratio2 * p1.x + ratio1 * p2.x) / (ratio1 + ratio2);
+
+	return cv::Point(px, py);
+}
+
+cv::Point Application::calLinearPointByX(cv::Vec2d L, double x)
+{
+	double m = L[0];
+	double c = L[1];
+	double y = 0;
+	if (m == 0) {
+		y = c;
+	}
+	else if (m == HUGE_VAL) {
+		y = 0;
+	}
+	else {
+		y = m * x + c;
+	}
+	return cv::Point(x, y);
+}
+
+cv::Point Application::calLinearPointByY(cv::Vec2d L, double y)
+{
+	double m = L[0];
+	double c = L[1];
+	double x = 0;
+	if (m == 0) {
+		x = 0;
+	}
+	else if (m == HUGE_VAL) {
+		x = -c;
+	}
+	else {
+		x = y / m - c;
+	}
+	return cv::Point(x, y);
+}
+
+void Application::calLinearInterceptCirclePoint(cv::Point center, double r, cv::Vec2d linear, cv::Point & p_out1, cv::Point & p_out2)
+{
+	double h = center.x;
+	double k = center.y;
+	double m = linear[0];
+	double c = linear[1];
+
+	double a = (m * m) + 1;
+	double b = (2 * m*(c - k)) - 2 * h;
+	double c_2 = ((h*h) + (c - k)*(c - k) - (r*r));
+
+	double p1_x1 = ((-1 * b) + sqrt(b*b - (4 * a*c_2))) / (2 * a);
+	double p1_x2 = ((-1 * b) - sqrt(b*b - (4 * a*c_2))) / (2 * a);
+
+	cv::Point p1_1 = calLinearPointByX(linear, p1_x1);
+	cv::Point p1_2 = calLinearPointByX(linear, p1_x2);
+
+	p_out1.x = p1_1.x;
+	p_out1.y = p1_1.y;
+	p_out2.x = p1_2.x;
+	p_out2.y = p1_2.y;
 }
 
 void Application::captureFrame()
