@@ -362,7 +362,7 @@ void Application::evaluateHandLayer1() // ~66ms
 		}
 	}
 
-	// cluster very near corner
+	
 	cv::cvtColor(handLayer1, handLayer1, cv::COLOR_GRAY2BGR);
 	vector<int> ignoreContours;
 	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
@@ -375,6 +375,7 @@ void Application::evaluateHandLayer1() // ~66ms
 	for (int i = 0; i < ignoreContours.size(); i++) {
 		cornerGroup.erase(ignoreContours[i]);
 	}
+	// cluster very near corner
 	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
 		vector<cv::Point> cluster;
 		clusterPoint(it->second, cluster, DISTANCE_THRESHOLD_CORNER_LAYER_1);
@@ -759,7 +760,7 @@ void Application::evaluateHandLayer3()
 
 	cv::Point boundingBoxTopMedian = calMedianPoint(cv::Point(boundingBox.x, boundingBox.y), cv::Point(boundingBox.x + boundingBox.width, boundingBox.y));
 
-	int radius = kinectReader.getHandRadius(50);
+	int radius = kinectReader.getHandRadius(HAND_RADIUS_MM);
 	cv::Point handPoint = kinectReader.getHandPoint();	// P2
 
 	cv::Vec2d boundingToHandLine = calLinear(boundingBoxTopMedian, handPoint);	// L
@@ -784,7 +785,7 @@ void Application::evaluateHandLayer3()
 	for (int i = 0; i < convexDefect.size(); i++) {
 		cv::Vec4i v = convexDefect[i];
 		int depth = v[3];
-		if (depth < 4000)
+		if (depth < CONVEX_DEPTH_THRESHOLD_LAYER_3)
 			continue;
 
 		cv::Point farPoint = largestContour[v[2]];
@@ -904,7 +905,7 @@ void Application::evaluateLayer12()
 	//find layer 2 finger centroid
 	cv::Point centroidL2 = calCentroid(fingerL2Point);
 
-	vector<cv::Point> fingerL1Point, fingerL1PointCentroid, fingerL1PointMultiple;
+	vector<cv::Point> fingerL1Point, fingerL1PointCentroid, fingerL1PointMultiple, fingerL1PointPalm;
 	vector<bool> fingerL2Used(fingerL2Point.size(), false);
 	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
 		vector<cv::Point> group = it->second;
@@ -939,16 +940,19 @@ void Application::evaluateLayer12()
 		if (ignore)
 			continue;
 		double farthestDist = 0;
-		int farthestIndex = 0;
 		double farthestDistC = 0;
-		int farthestIndexC = 0;
 		double farthestDistMulti = 0;
+		double nearestDistPalm = 1000;
+		int farthestIndex = 0;
+		int farthestIndexC = 0;
 		int farthestIndexM = 0;
+		int nearestIndexP = 0;
 
 		
 		for (int i = 0; i < group.size(); i++) {
 			double d = cv::pointPolygonTest(hullL2, group[i], true);
 			double dc = calDistance(group[i], centroidL2);
+			double dp = calDistance(group[i], palmPoint);
 			if (d > farthestDist) {
 				farthestDist = d;
 				farthestIndex = i;
@@ -961,13 +965,19 @@ void Application::evaluateLayer12()
 				farthestDistMulti = dc * d;
 				farthestIndexM = i;
 			}
+			if (dp < nearestDistPalm) {
+				nearestDistPalm = dp;
+				nearestIndexP = i;
+			}
 
 			cout << d << " ";
 
 			cv::circle(handLayer2, group[i], 1, cv::Scalar(0, 255, 255), -1);
 
+			if (dp > 1000)
+				continue;
 			char buffer[10];
-			sprintf_s(buffer, "%.2f", d);
+			sprintf_s(buffer, "%.2f", dp);
 			cv::putText(handLayer2, buffer, cv::Point(group[i].x, group[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.2, cv::Scalar(0, 102, 255), 1);
 			//cv::circle(handLayer2, group[i], abs(d), cv::Scalar(255, 128, 0), 2);
 		}
@@ -975,6 +985,7 @@ void Application::evaluateLayer12()
 		fingerL1PointCentroid.push_back(group[farthestIndexC]);
 		fingerL1Point.push_back(group[farthestIndex]);
 		fingerL1PointMultiple.push_back(group[farthestIndexM]);
+		fingerL1PointPalm.push_back(group[nearestIndexP]);
 	}
 
 	if (hullL2.size() != 0)
@@ -990,11 +1001,19 @@ void Application::evaluateLayer12()
 	}
 	else {
 		// use farthest from hull
-		for (int i = 0; i < fingerL1Point.size(); i++) {
+		/*for (int i = 0; i < fingerL1Point.size(); i++) {
 			cv::circle(handLayer2, fingerL1Point[i], 4, cv::Scalar(0, 0, 255), 2);
 
 			fingerPointL12.push_back(fingerL1Point[i]);
+		}*/
+
+		// use farthest from palm
+		for (int i = 0; i < fingerL1PointPalm.size(); i++) {
+			cv::circle(handLayer2, fingerL1PointPalm[i], 4, cv::Scalar(0, 0, 255), 2);
+
+			fingerPointL12.push_back(fingerL1PointPalm[i]);
 		}
+
 	}
 	
 	for (int i = 0; i < fingerL2Used.size(); i++) {
@@ -1016,6 +1035,7 @@ void Application::evaluateLayer12()
 		cv::circle(handLayer3, fingerPointL12[i], 4, cv::Scalar(0, 0, 255), 2);
 	}
 	
+	cv::circle(handLayer2, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
 }
 
 void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh)

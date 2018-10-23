@@ -21,6 +21,9 @@ protected :
 
 	/* Threshold for select convexity defect on hand layer 2 */
 	const int CONVEX_DEPTH_THRESHOLD_LAYER_2 = 10000;
+	
+	/* Threshold for select convexity defect on hand layer 3 */
+	const int CONVEX_DEPTH_THRESHOLD_LAYER_3 = 4000;
 
 	/* General threshold for cluster points */
 	const int DISTANCE_THESHOLD = 10;
@@ -33,6 +36,8 @@ protected :
 
 	/* Minimum distance for merge finger layer 2 to contour layer 1 */
 	const int MIN_DIST_12 = -4;
+
+	const int HAND_RADIUS_MM = 50;
 
 	const string WINDOW_RGB = "RGB";
 	const string WINDOW_DEPTH = "Depth";
