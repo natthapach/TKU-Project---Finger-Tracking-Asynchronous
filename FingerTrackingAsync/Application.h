@@ -17,7 +17,7 @@ protected :
 	/* Percentage threshold for build hand layer 2 */
 	const double BUILD_LAYER_2_THRESHOLD = 0.6;
 	/* Percentage threshold for build hand layer 3 */
-	const double BUILD_LAYER_3_THRESHOLD = 1.0;
+	const double BUILD_LAYER_3_THRESHOLD = 0.9;
 
 	/* Threshold for select convexity defect on hand layer 2 */
 	const int CONVEX_DEPTH_THRESHOLD_LAYER_2 = 10000;
@@ -57,6 +57,7 @@ protected :
 	cv::Mat handLayer2 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer3 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 
+	cv::Point palmPoint = cv::Point(0, 0);
 	vector<cv::Point> handLayer1Corners;
 	vector<vector<cv::Point>> contoursL1;
 	map<int, vector<cv::Point>> cornerGroup;

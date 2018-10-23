@@ -733,7 +733,14 @@ void Application::evaluateHandLayer3()
 	}
 
 	vector<cv::Point> largestContour = contours[largestIndex];
+	
+	vector<int> largestHull;
+	cv::convexHull(largestContour, largestHull);
+	vector<cv::Vec4i> convexDefect;
+	cv::convexityDefects(largestContour, largestHull, convexDefect);
 
+
+	// find heightest contour point
 	int heightestY = 480;
 	int heightestIndex = -1;
 	for (int i = 0; i < largestContour.size(); i++) {
@@ -764,84 +771,130 @@ void Application::evaluateHandLayer3()
 	calEndpoint(heightestToHandLine, hhl_p1, hhl_p2);
 
 	double distTopHand = calDistance(handPoint, boundingBoxTopMedian);
+	double distHeightestHand = calDistance(handPoint, heightestPoint);
 	double distHandPalm = 2 * distTopHand - 80;
-	double distHeightestPalm = 2 * distTopHand - 80;
-
-	// rename to famula
-	/*cv::Point p2 = handPoint;
-	cv::Point p3 = boundingBoxTopMedian;
-	cv::Vec2d L = boundingToHandLine;
-	double m = L[0];
-	double c = L[1];
-	double T = distTopHand;
-	double Q = distHandPalm;
-	double a = pow(m, 2) + 1;
-	double b = (2 * m*c) - (2 * p3.x) - (2 * m*p3.y);
-	double c_2 = pow(p3.x, 2) + pow(c, 2) - (2 * c*p3.y) + p3.y - pow(Q, 2);
-	double inSqrt = b * b - 4 * a*c_2;
-	double p1_px_1 = (-b + sqrt(b*b - 4 * a*c_2)) / (2 * a);
-	double p1_px_2 = (-b - sqrt(b*b - 4 * a*c_2)) / (2 * a);
-	cv::Point p1_1 = calLinearPointByX(L, p1_px_1);
-	cv::Point p1_2 = calLinearPointByX(L, p1_px_2);*/
-
-	/*double r = distHandPalm;
-	double h = handPoint.x;
-	double k = handPoint.y;
-	double m = boundingToHandLine[0];
-	double c = boundingToHandLine[1];
-
-	double a = (m * m) + 1;
-	double b = (2 * m*(c - k)) - 2 * h;
-	double c_2 = ((h*h) + (c - k)*(c - k) - (r*r));
-
-	double p1_x1 = ((-1*b) + sqrt(b*b - (4 * a*c_2))) / (2 * a);
-	double p1_x2 = ((-1*b) - sqrt(b*b - (4 * a*c_2))) / (2 * a);
-
-	cv::Point p1_1 = calLinearPointByX(boundingToHandLine, p1_x1);
-	cv::Point p1_2 = calLinearPointByX(boundingToHandLine, p1_x2);*/
+	double distHeightestPalm = 2 * distHeightestHand - 80;
 
 	cv::Point p1_1, p1_2;
 	calLinearInterceptCirclePoint(handPoint, distHandPalm, boundingToHandLine, p1_1, p1_2);
 	cv::Point p4_1, p4_2;
 	calLinearInterceptCirclePoint(handPoint, distHeightestPalm, heightestToHandLine, p4_1, p4_2);
 	
+	vector<cv::Point> convex;
+	for (int i = 0; i < convexDefect.size(); i++) {
+		cv::Vec4i v = convexDefect[i];
+		int depth = v[3];
+		if (depth < 4000)
+			continue;
 
-
-	cv::Point palmPoint = cv::Point(0, 0);
-	// draw
-	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
-
-	cv::line(handLayer3, bhl_p1, bhl_p2, cv::Scalar(255, 0, 0), 2);
-
-	cv::circle(handLayer3, heightestPoint, 4, cv::Scalar(255, 0, 255), -1);
-	cv::line(handLayer3, hhl_p1, hhl_p2, cv::Scalar(255, 0, 255), 2);
-
-	cv::circle(handLayer3, handPoint, radius, cv::Scalar(0, 102, 255), 2);
-	if (distHandPalm > 0)
-		cv::circle(handLayer3, handPoint, distHandPalm, cv::Scalar(0, 0, 255), 2);
-	cv::circle(handLayer3, handPoint, 3, cv::Scalar(0, 102, 255), -1);
-	
-	cv::circle(handLayer3, p1_1, radius, cv::Scalar(255, 0, 0), 2);
-	cv::circle(handLayer3, p1_1, 3, cv::Scalar(255, 0, 0), -1);
-
-	cv::circle(handLayer3, p1_2, radius, cv::Scalar(255, 0, 0), 2);
-	cv::circle(handLayer3, p1_2, 3, cv::Scalar(255, 0, 0), -1);
-	
-	cv::circle(handLayer3, p4_1, radius, cv::Scalar(255, 0, 255), 2);
-	cv::circle(handLayer3, p4_1, 3, cv::Scalar(255, 0, 255), -1);
-
-	cv::circle(handLayer3, p4_2, radius, cv::Scalar(255, 0, 255), 2);
-	cv::circle(handLayer3, p4_2, 3, cv::Scalar(255, 0, 255), -1);
-
-	/*cv::circle(handLayer3, palmPoint, radius, cv::Scalar(255, 0, 0), 2);
-	cv::circle(handLayer3, palmPoint, 3, cv::Scalar(255, 0, 0), -1);*/
-	
-	cv::rectangle(handLayer3, boundingBox, cv::Scalar(0, 255, 0), 2);
-	for (int i = 0; i < 4; i++) {
-		cv::line(handLayer3, vertices2f[i], vertices2f[(i + 1) % 4], cv::Scalar(255, 255, 0), 2);
+		cv::Point farPoint = largestContour[v[2]];
+		convex.push_back(farPoint);
+		/*cv::circle(handLayer3, farPoint, 4, cv::Scalar(0, 102, 255), 2);*/
 	}
 
-	cv::circle(handLayer3, boundingBoxTopMedian, 4, cv::Scalar(0, 255, 0), -1);
+	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
+
+	
+	if (convex.size() <= 2) {
+		// use height point
+		double d1 = calDistance(heightestPoint, p4_1);
+		double d2 = calDistance(heightestPoint, p4_2);
+
+		if (d1 < d2) {
+			palmPoint.x = p4_2.x;
+			palmPoint.y = p4_2.y;
+		}
+		else {
+			palmPoint.x = p4_1.x;
+			palmPoint.y = p4_1.y;
+		}
+	}
+	else {
+		// use convex
+		double maxConvexDist = 0;
+		int edgeConvexIndex1 = 0;
+		int edgeConvexIndex2 = 0;
+
+		for (int i = 0; i < convex.size(); i++) {
+			for (int j = i + 1; j < convex.size(); j++) {
+				double d = calDistance(convex[i], convex[j]);
+				if (d > maxConvexDist) {
+					maxConvexDist = d;
+					edgeConvexIndex1 = i;
+					edgeConvexIndex2 = j;
+				}
+			}
+		}
+		cv::Point pe1 = convex[edgeConvexIndex1];
+		cv::Point pe2 = convex[edgeConvexIndex2];
+
+		
+		vector<cv::Point> intercepts;
+		for (int i = 0; i < convex.size(); i++) {
+			if (i == edgeConvexIndex1 || i == edgeConvexIndex2) {
+				cv::circle(handLayer3, convex[i], 4, cv::Scalar(0, 102, 255), -1);
+				continue;
+			}
+
+			cv::circle(handLayer3, convex[i], 4, cv::Scalar(0, 102, 255), 2);
+			cv::Point pi = convex[i];
+			cv::Vec2d l1 = calLinear(pi, pe1);
+			cv::Vec2d l2 = calLinear(pi, pe2);
+			cv::Point mp1 = calMedianPoint(pi, pe1);
+			cv::Point mp2 = calMedianPoint(pi, pe2);
+			cv::Vec2d lp1 = calPerpendicularLine(l1, mp1);
+			cv::Vec2d lp2 = calPerpendicularLine(l2, mp2);
+			cv::Point intercept = calInterceptPoint(lp1, lp2);
+
+			intercepts.push_back(intercept);
+		}
+
+		cv::Point center = calCentroid(intercepts);
+		palmPoint.x = center.x;
+		palmPoint.y = center.y;
+	}
+
+
+	
+	// draw
+	
+
+	cv::circle(handLayer3, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
+	cv::circle(handLayer3, palmPoint, radius, cv::Scalar(0, 102, 255), 2);
+
+	//cv::line(handLayer3, bhl_p1, bhl_p2, cv::Scalar(255, 0, 0), 2);
+
+	//cv::circle(handLayer3, heightestPoint, 4, cv::Scalar(255, 0, 255), -1);
+	//cv::line(handLayer3, hhl_p1, hhl_p2, cv::Scalar(255, 0, 255), 2);
+
+	//cv::circle(handLayer3, handPoint, radius, cv::Scalar(0, 102, 255), 2);
+	//if (distHandPalm > 0)
+	//	cv::circle(handLayer3, handPoint, distHandPalm, cv::Scalar(0, 0, 255), 2);
+	//cv::circle(handLayer3, handPoint, 3, cv::Scalar(0, 102, 255), -1);
+	//
+	//cv::circle(handLayer3, p1_1, radius, cv::Scalar(255, 0, 0), 2);
+	//cv::circle(handLayer3, p1_1, 3, cv::Scalar(255, 0, 0), -1);
+
+	//cv::circle(handLayer3, p1_2, radius, cv::Scalar(255, 0, 0), 2);
+	//cv::circle(handLayer3, p1_2, 3, cv::Scalar(255, 0, 0), -1);
+	//
+	//cv::circle(handLayer3, p4_1, radius, cv::Scalar(255, 0, 255), 2);
+	//cv::circle(handLayer3, p4_1, 3, cv::Scalar(255, 0, 255), -1);
+
+	//cv::circle(handLayer3, p4_2, radius, cv::Scalar(255, 0, 255), 2);
+	//cv::circle(handLayer3, p4_2, 3, cv::Scalar(255, 0, 255), -1);
+
+	///*cv::circle(handLayer3, palmPoint, radius, cv::Scalar(255, 0, 0), 2);
+	//cv::circle(handLayer3, palmPoint, 3, cv::Scalar(255, 0, 0), -1);*/
+	//
+	//cv::rectangle(handLayer3, boundingBox, cv::Scalar(0, 255, 0), 2);
+	//for (int i = 0; i < 4; i++) {
+	//	cv::line(handLayer3, vertices2f[i], vertices2f[(i + 1) % 4], cv::Scalar(255, 255, 0), 2);
+	//}
+
+	//cv::circle(handLayer3, boundingBoxTopMedian, 4, cv::Scalar(0, 255, 0), -1);
+
+	
 }
 
 void Application::evaluateLayer12()
@@ -926,79 +979,6 @@ void Application::evaluateLayer12()
 
 	if (hullL2.size() != 0)
 		cv::drawContours(handLayer2, vector<vector<cv::Point>> {hullL2}, 0, cv::Scalar(0, 255, 0), 1);
-
-	/*for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
-		vector<cv::Point> points = it->second;
-		cv::Point centroid = calCentroid(points);
-		ConvexSorter sorter;
-		sorter.origin = centroid;
-		sort(points.begin(), points.end(), sorter);
-		for (int i = 0; i < points.size(); i++) {
-			cv::Point pi = points[i];
-			cv::Point pj = points[(i + 1) % points.size()];
-			cv::circle(handLayer2, pi, 2, cv::Scalar(0, 0, 255), -1);
-			cv::line(handLayer2, pi, pj, cv::Scalar(0, 0, 255), 1);
-		}
-	}*/
-	/*for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
-		if (handBounder.size() == 0)
-			break;
-
-		vector<cv::Point> points = it->second;
-		bool isInside = false;
-		double minDist = 1000000;
-		double maxDist = -1000000;
-		int minIndex = -1;
-		int maxIndex = -1;
-		for (int i = 0; i < points.size(); i++) {
-			double d = cv::pointPolygonTest(handBounder, points[i], true);
-
-			if (d >= 0)
-				isInside = true;
-			if (d > maxDist) {
-				maxDist = d;
-				maxIndex = i;
-			}
-			if (d < minDist) {
-				minDist = d;
-				minIndex = i;
-			}
-		}
-
-		if (isInside) {
-			cv::circle(handLayer2, points[maxIndex], 4, cv::Scalar(0, 255, 255), 2);
-		}
-		else {
-			cv::circle(handLayer2, points[minIndex], 4, cv::Scalar(0, 255, 255), 2);
-		}
-	}*/
-	/*for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++) {
-		vector<cv::Point> points = it->second;
-		if (points.size() == 1) {
-			cv::circle(handLayer2, points[0], 4, cv::Scalar(0, 255, 255), 2);
-		}
-		else if (points.size() == 2) {
-
-		}
-		else {
-			double minDegree = 360;
-			int minIndex = -1;
-			for (int i = 0; i < points.size(); i++) {
-				cv::Point ph = points[(i - 1) % points.size()];
-				cv::Point pi = points[i];
-				cv::Point pj = points[(i + 1) % points.size()];
-
-				double angle = abs(calAngle(ph, pi, pj));
-				if (angle < minDegree) {
-					minDegree = angle;
-					minIndex = i;
-				}
-			}
-			if (minIndex == -1)
-				continue;
-			cv::circle(handLayer2, points[minIndex], 4, cv::Scalar(0, 255, 255), 2);
-		}
-	}*/
 
 	if (fingerL2Point.size() > 0) {
 		// use farthest from centroid
