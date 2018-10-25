@@ -24,6 +24,8 @@ public :
 	cv::Point getHandPoint();
 	int getHandRadius(int mm);
 
+	void convertDepthToColor(int x, int y, int z, int *cx, int *cy);
+
 protected :
 	const int RANGE = 100;
 	openni::Device device;
@@ -35,9 +37,10 @@ protected :
 	uint16_t depthRaw[480][640];
 	uchar img[480][640][3];
 	uchar mask[480][640];
+	uchar maskColor[480][640];
 
 	cv::Mat colorFrame = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
-	cv::Mat *colorFramePtr;
+	cv::Mat colorDepthFrame;
 	cv::Mat depthFrame;
 	cv::Mat depthHandMask;
 

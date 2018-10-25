@@ -56,11 +56,16 @@ protected :
 	cv::Mat depthFrame;
 	cv::Mat rawDepthFrame;
 	cv::Mat edgeColorFrame;
+	cv::Mat edgeMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat histogramFrame;
 	cv::Mat handMask;
 	cv::Mat handLayer1 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer2 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer3 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+	cv::Mat handLayerPalm = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
+
+	cv::Point handPoint;
+	int handRadius;
 
 	cv::Point palmPoint = cv::Point(0, 0);
 	vector<cv::Point> handLayer1Corners;
@@ -68,7 +73,6 @@ protected :
 	map<int, vector<cv::Point>> cornerGroup;
 	vector<cv::Point> fingerL2Point;
 	vector<cv::Point> hullL2;
-	vector<cv::Point> handBounder;
 	vector<cv::Point> fingerPointL12;
 
 	cv::MatND hist;
@@ -83,11 +87,13 @@ protected :
 	void buildHand3Layers();
 	void buildHistogram();
 	void buildRawHandHistogram();
+	void buildEdgeMask();
 
 	void evaluateHandLayer1();
 	void evaluateHandLayer2();
 	void evaluateHandLayer3();
-	void evaluateLayer12();
+	void evaluateHandLayerPalm();
+	void evaluate3Layer();
 
 	void clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh);
 	double calDistance(cv::Point p1, cv::Point p2);

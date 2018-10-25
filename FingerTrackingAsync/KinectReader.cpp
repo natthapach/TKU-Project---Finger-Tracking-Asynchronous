@@ -73,6 +73,18 @@ void KinectReader::readRGBFrame()
 
 cv::Mat KinectReader::getDepthFrame()
 {
+	int pcx_1, pcy_1;
+	int pcx_2, pcy_2;
+	int pcx_3, pcy_3;
+	int pcx_4, pcy_4;
+	openni::CoordinateConverter::convertDepthToColor(depthStream, colorStream, 0, 0, 700, &pcx_1, &pcy_1);
+	openni::CoordinateConverter::convertDepthToColor(depthStream, colorStream, 639, 0, 700, &pcx_2, &pcy_2);
+	openni::CoordinateConverter::convertDepthToColor(depthStream, colorStream, 639, 479, 700, &pcx_3, &pcy_3);
+	openni::CoordinateConverter::convertDepthToColor(depthStream, colorStream, 0, 479, 700, &pcx_4, &pcy_4);
+	cout << "(0,0,500) = (" << pcx_1 << ", " << pcy_1 << ")" << endl;
+	cout << "(639,0,500) = (" << pcx_2 << ", " << pcy_2 << ")" << endl;
+	cout << "(639,479,500) = (" << pcx_3 << ", " << pcy_3 << ")" << endl;
+	cout << "(0,479,500) = (" << pcx_4 << ", " << pcy_4 << ")" << endl;
 	if (readDepthThread.joinable())
 		readDepthThread.join();
 	depthFrame = cv::Mat(480, 640, CV_8UC3, &img);
@@ -143,6 +155,11 @@ int KinectReader::getHandRadius(int mm)
 	return radius;
 }
 
+void KinectReader::convertDepthToColor(int x, int y, int z, int * cx, int * cy)
+{
+	openni::CoordinateConverter::convertDepthToColor(depthStream, colorStream, x, y, z, cx, cy);
+}
+
 void KinectReader::asyncReadRGBFrame()
 {
 	uchar img[480][640][3];
@@ -179,7 +196,13 @@ void KinectReader::asyncReadDepthFrame()
 
 	nite::Status status = nite::STATUS_OK;
 
-	status = handTracker.readFrame(&handsFrame);
+	try {
+		status = handTracker.readFrame(&handsFrame);
+	}
+	catch(int e) {
+		cout << "Unhandle Exception from Hand Tracker Read Frame : " << e << endl;
+		return;
+	}
 	if (status != nite::STATUS_OK || !handsFrame.isValid())
 		return;
 
@@ -245,6 +268,7 @@ void KinectReader::modifyImage(openni::VideoFrameRef depthFrame, int numberOfPoi
 			openni::DepthPixel* depthPixel = (openni::DepthPixel*)
 				((char*)depthFrame.getData() + (y*depthFrame.getStrideInBytes())) + x;
 			depthRaw[y][x] = *depthPixel;
+
 			if (*depthPixel != 0) {
 				uchar depthValue = (uchar)(((float)depthHistogram[*depthPixel] / numberOfPoints) * 255);
 				img[y][x][0] = 255 - depthValue;
