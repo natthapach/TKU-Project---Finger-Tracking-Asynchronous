@@ -174,6 +174,7 @@ void Application::buildSkinMask()
 void Application::buildDepthHandMask()
 {
 	kinectReader.getDepthHandMask().copyTo(handMask);
+
 	float handPosX = kinectReader.getHandPosX();
 	float handPosY = kinectReader.getHandPosY();
 	int smallKernel = 3;
@@ -362,8 +363,9 @@ void Application::evaluateHandLayer1() // ~66ms
 		float* cornerRow = corner.ptr<float>(j);
 		for (int i = 0; i < corner.cols; i++) {
 			if (cornerRow[i] > CORNER_THRESHOLD) {
-				if (handLayer1.ptr<uchar>(j)[i] > 0)
+				if (handLayer1.ptr<uchar>(j)[i] > 0) {
 					handLayer1Corners.push_back(cv::Point(i, j));
+				}
 			}
 		}
 	}
@@ -646,6 +648,7 @@ void Application::evaluateHandLayerPalm()
 	}
 
 	vector<cv::Point> largestContour = contours[largestIndex];
+	cv::drawContours(handLayerPalm, contours, largestIndex, cv::Scalar(255), -1);
 	vector<int> largestHull;
 	cv::convexHull(contours[largestIndex], largestHull);
 	vector<cv::Vec4i> defect;
@@ -654,23 +657,55 @@ void Application::evaluateHandLayerPalm()
 
 	
 
-
+	vector<bool> changingTable(boundingBox.height+4, false);
 	for (int y = boundingBox.y; y < boundingBox.y + boundingBox.height; y++) {
 		uchar* handPalmRow = handLayerPalm.ptr<uchar>(y);
 		int changing = 0;
 		int prev = 0;
+		int countWhite = 0;
 		for (int x = boundingBox.x - 5; x < boundingBox.x + boundingBox.width + 5; x++) {
 			int cur = handPalmRow[x];
+			int next = handPalmRow[x + 2];
 
-			if (cur != prev) {
+			if (cur != prev && prev != next) {
 				changing += 1;
 				prev = cur;
+			}
+
+			if (cur == 255) {
+				countWhite += 1;
 			}
 		}
 
 		if (changing <= 2) {
-			cv::rectangle(handLayerPalm, cv::Rect(cv::Point(500, y), cv::Size(10, 1)), cv::Scalar(128), -1);
+			if (countWhite >= 1.5*handRadius)
+				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x+boundingBox.width + 10, y), cv::Size(10, 1)), cv::Scalar(255), -1);
+			else 
+				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 10, y), cv::Size(10, 1)), cv::Scalar(128), -1);
+			changingTable[y - boundingBox.y] = true;
 		}
+	}
+
+	int start_region = 0;
+	bool regioning = false;
+	bool prev = false;
+	for (int i = 0; i < changingTable.size()-4; i++) {
+		bool cur = changingTable[i];
+		bool next = changingTable[i + 4];
+
+		if (cur != prev && prev != next) {
+			prev = cur;
+			if (regioning) {
+				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 30, boundingBox.y + start_region), cv::Size(10, i - start_region)), cv::Scalar(128), -1);
+			}
+			else {
+				start_region = i;
+			}
+			regioning = !regioning;
+		}
+	}
+	if (regioning) {
+		cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 30, boundingBox.y + start_region), cv::Size(10, changingTable.size() - 4 - start_region)), cv::Scalar(128), -1);
 	}
 
 	cv::cvtColor(handLayerPalm, handLayerPalm, cv::COLOR_GRAY2BGR);
@@ -1127,9 +1162,14 @@ void Application::captureFrame()
 	char buffer_concat[80];
 	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
 	cv::imwrite(buffer_concat, concat);*/
-	char buffer[80];
-	sprintf_s(buffer, "%d - depth.jpg", ts);
-	cv::imwrite(buffer, depthFrame);
+	char buffer_1[80], buffer_2[80], buffer_3[80], buffer_4[80];
+	sprintf_s(buffer_1, "%d - HL1_COR.jpg", ts);
+	sprintf_s(buffer_2, "%d - HL1_CON.jpg", ts);
+	sprintf_s(buffer_3, "%d - HL1_COR_G.jpg", ts);
+	sprintf_s(buffer_4, "%d - HL1.jpg", ts);
+	
+	//cv::imwrite(buffer_1, HL1_COR);
+
 }
 
 void Application::calculateContourArea(vector<cv::Point> contour, double * area)
