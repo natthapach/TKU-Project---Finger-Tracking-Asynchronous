@@ -738,6 +738,16 @@ void Application::evaluateHandLayerPalm()
 		}
 		else {
 			if (start_accept_length != -1) {
+				bool isMergeSection = false;
+				for (int j = 1; j <= 10 && i + j < acceptLengthTable.size(); j++) {
+					if (acceptLengthTable[i + j]) {
+						isMergeSection = true;
+						break;
+					}
+				}
+				if (isMergeSection) {
+					continue;
+				}
 				int range = i - start_accept_length;
 				if (range > maxRange) {
 					maxRange = range;
@@ -824,6 +834,28 @@ void Application::evaluateHandLayerPalm()
 		cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 30, boundingBox.y + start_region), cv::Size(10, changingTable.size() - 4 - start_region)), cv::Scalar(128), -1);
 	}
 
+	cv::Mat palmCenter1Mask = cv::Mat::zeros(handLayerPalm.size(), CV_8UC1);
+	cv::Mat palmCenter2Mask = cv::Mat::zeros(handLayerPalm.size(), CV_8UC1);
+	cv::Mat palmTestCenter1, palmTestCenter2;
+	if (hasCenter1) {
+		cv::circle(palmCenter1Mask, center1, handRadius, cv::Scalar(255), -1);
+		/*cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
+		cv::circle(handLayerPalm, center1, handRadius, cv::Scalar(0, 0, 255), 1);*/
+	}
+	if (hasCenter2) {
+		/*cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 102, 255), 1);
+		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 102, 255), 1);*/
+		cv::circle(palmCenter2Mask, center2, handRadius, cv::Scalar(255), -1);
+	}
+
+	cv::bitwise_and(handLayerPalm, palmCenter1Mask, palmTestCenter1);
+	cv::bitwise_and(handLayerPalm, palmCenter2Mask, palmTestCenter2);
+	int whiteCenter1 = cv::countNonZero(palmTestCenter1);
+	int whiteCenter2 = cv::countNonZero(palmTestCenter2);
+
+	cv::imshow("Palm Test C1", palmTestCenter1);
+	cv::imshow("Palm Test C2", palmTestCenter2);
+
 	cv::cvtColor(handLayerPalm, handLayerPalm, cv::COLOR_GRAY2BGR);
 	cv::rectangle(handLayerPalm, boundingBox, cv::Scalar(0, 255, 0), 2);
 	
@@ -835,14 +867,15 @@ void Application::evaluateHandLayerPalm()
 		//cv::line(handLayerPalm, cv::Point(concave.x, boundingBox.y), cv::Point(concave.x, boundingBox.y + boundingBox.height), cv::Scalar(0, 102, 255), 2);
 	}
 
-	if (hasCenter1) {
+	if (whiteCenter1 > whiteCenter2) {
 		cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
 		cv::circle(handLayerPalm, center1, handRadius, cv::Scalar(0, 0, 255), 1);
 	}
-	if (hasCenter2) {
-		cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 0, 255), 1);
-		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 0, 255), 1);
+	else {
+		cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 102, 255), 1);
+		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 102, 255), 1);
 	}
+	
 	
 }
 
