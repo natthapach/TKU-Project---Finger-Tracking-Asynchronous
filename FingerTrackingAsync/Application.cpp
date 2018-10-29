@@ -57,6 +57,9 @@ void Application::start()
 			buildEdgeColorT.join();
 			buildEdgeMask();
 
+			cv::imshow("edge maskx", edgeMask);
+			cv::imshow("hand layer1 depth", handLayer1Depth);
+
 			//buildHistogram();
 			//buildRawHandHistogram();
 
@@ -77,6 +80,7 @@ void Application::start()
 			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
 			cv::imshow(WINDOW_MASK_L2, handLayer2);
 			cv::imshow(WINDOW_MASK_L3, handLayer3);
+			cv::imshow("Hand Absolute", handLayerAbs);
 			cv::imshow("Edge", edgeColorFrame);
 			cv::imshow("Palm", handLayerPalm);
 			//cv::imshow("histogram", histogramFrame);
@@ -254,6 +258,18 @@ void Application::buildHand3Layers()
 	cv::threshold(rawDepthFrame, handLayer3, l3_max, 65535, cv::THRESH_BINARY_INV);
 	handLayer3.convertTo(handLayer3, CV_8UC1, 255.0 / 65535);
 	cv::bitwise_and(handMask, handLayer3, handLayer3);
+
+	handMask.copyTo(handLayerAbs);
+	cv::cvtColor(handLayerAbs, handLayerAbs, cv::COLOR_GRAY2BGR);
+
+	cv::Mat maskLayer1;
+	handLayer1.convertTo(maskLayer1, CV_16UC1);
+	
+	cv::bitwise_and(maskLayer1, rawDepthFrame, handLayer1Depth);
+	double minL1, maxL1;
+	cv::minMaxLoc(handLayer1Depth, &minL1, &maxL1, NULL, NULL, handLayer1);
+	cv::normalize(handLayer1Depth, handLayer1Depth, 0, 255, cv::NORM_MINMAX, CV_8UC1, handLayer1);
+	cv::adaptiveThreshold(handLayer1Depth, handLayer1Depth, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 5, 2);
 }
 
 void Application::buildHistogram()
@@ -336,13 +352,13 @@ void Application::buildEdgeMask()
 			int m = handMaskRow[x];
 			int z = rawRow[x];
 			if (z == 0 || m == 0) {
-				edgeMaskRow[x] = 0;
+				edgeMaskRow[x] = 128;
 				continue;
 			}
 			int cx, cy;
 			kinectReader.convertDepthToColor(x, y, z, &cx, &cy);
 			if (cx < 0 || cx >= 640 || cy < 0 || cy >= 480 || z == 0) {
-				edgeMaskRow[x] = 0;
+				edgeMaskRow[x] = 128;
 			}
 			else {
 				edgeMaskRow[x] = edgeColorFrame.at<uchar>(cy, cx);
@@ -354,6 +370,7 @@ void Application::buildEdgeMask()
 
 void Application::evaluateHandLayer1() // ~66ms
 {
+	cv::bitwise_and(handLayer1, edgeMask, handLayer1);
 	handLayer1Corners.clear();
 	cv::Mat corner;
 	cv::cornerHarris(handLayer1, corner, 8, 5, 0.04, cv::BORDER_DEFAULT);
@@ -373,6 +390,19 @@ void Application::evaluateHandLayer1() // ~66ms
 	// group corner by contours
 	vector<cv::Vec4i> hierachy;
 	cv::findContours(handLayer1, contoursL1, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+
+	// find all centroid
+	vector<cv::Moments> mu(contoursL1.size());
+	for (int i = 0; i < mu.size(); i++)
+	{
+		mu[i] = cv::moments(contoursL1[i], false);
+	}
+	vector<cv::Point2f> mc(contoursL1.size());
+	for (int i = 0; i < contoursL1.size(); i++)
+	{
+		mc[i] = cv::Point2f(mu[i].m10 / mu[i].m00, mu[i].m01 / mu[i].m00);
+	}
+
 	cornerGroup.clear();
 	for (int i = 0; i < handLayer1Corners.size(); i++) {
 		cv::Point corner_i = handLayer1Corners[i];
@@ -410,6 +440,13 @@ void Application::evaluateHandLayer1() // ~66ms
 	for (int i = 0; i < handLayer1Corners.size(); i++) {
 		cv::circle(handLayer1, handLayer1Corners[i], 1, cv::Scalar(0, 0, 255), -1);
 	}
+
+	/*for (int i = 0; i < mc.size(); i++)
+	{
+		cv::circle(handLayer1, mc[i], 2, cv::Scalar(0, 255, 0), -1);
+	}*/
+
+	cv::circle(handLayer1, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
 }
 
 void Application::evaluateHandLayer2()	// 7ms
@@ -562,14 +599,14 @@ void Application::evaluateHandLayer3()
 		double d1 = calDistance(heightestPoint, p4_1);
 		double d2 = calDistance(heightestPoint, p4_2);
 
-		if (d1 < d2) {
+		/*if (d1 < d2) {
 			palmPoint.x = p4_2.x;
 			palmPoint.y = p4_2.y;
 		}
 		else {
 			palmPoint.x = p4_1.x;
 			palmPoint.y = p4_1.y;
-		}
+		}*/
 	}
 	else {
 		// use convex
@@ -612,8 +649,8 @@ void Application::evaluateHandLayer3()
 		}
 
 		cv::Point center = calCentroid(intercepts);
-		palmPoint.x = center.x;
-		palmPoint.y = center.y;
+		/*palmPoint.x = center.x;
+		palmPoint.y = center.y;*/
 
 		cv::circle(handLayer3, center, handRadius, cv::Scalar(0, 255, 0), 2);
 		cv::circle(handLayer3, center, 4, cv::Scalar(0, 255, 0), -1);
@@ -839,6 +876,8 @@ void Application::evaluateHandLayerPalm()
 	cv::Mat palmTestCenter1, palmTestCenter2;
 	if (hasCenter1) {
 		cv::circle(palmCenter1Mask, center1, handRadius, cv::Scalar(255), -1);
+		palmPoint.x = center1.x;
+		palmPoint.y = center1.y;
 		/*cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
 		cv::circle(handLayerPalm, center1, handRadius, cv::Scalar(0, 0, 255), 1);*/
 	}
@@ -846,6 +885,8 @@ void Application::evaluateHandLayerPalm()
 		/*cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 102, 255), 1);
 		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 102, 255), 1);*/
 		cv::circle(palmCenter2Mask, center2, handRadius, cv::Scalar(255), -1);
+		palmPoint.x = center2.x;
+		palmPoint.y = center2.y;
 	}
 
 	cv::bitwise_and(handLayerPalm, palmCenter1Mask, palmTestCenter1);
@@ -957,7 +998,7 @@ void Application::evaluate3Layer()
 				nearestDistPalm = dp;
 				nearestIndexP = i;
 			}
-			if (dp <= handRadius) {
+			if (dp <= handRadius + 5) {
 				inPalm = true;
 			}
 			
@@ -1037,12 +1078,16 @@ void Application::evaluate3Layer()
 	
 	for (int i = 0; i < fingerPointL12.size(); i++) {
 		cv::circle(handLayer3, fingerPointL12[i], 4, cv::Scalar(0, 0, 255), 2);
+		cv::circle(handLayerAbs, fingerPointL12[i], 4, cv::Scalar(0, 0, 255), 2);
 	}
 	
 	int handRadiusLess = 0.5 * handRadius;
 	cv::circle(handLayer2, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
 	cv::circle(handLayer2, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);
 	cv::circle(handLayer2, palmPoint, handRadiusLess, cv::Scalar(0, 102, 255), 2);
+
+	cv::circle(handLayerAbs, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
+	cv::circle(handLayerAbs, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);
 }
 
 void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh)
