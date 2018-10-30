@@ -264,12 +264,42 @@ void Application::buildHand3Layers()
 
 	cv::Mat maskLayer1;
 	handLayer1.convertTo(maskLayer1, CV_16UC1);
+	handLayer1.copyTo(handLayer1Depth);
 	
-	cv::bitwise_and(maskLayer1, rawDepthFrame, handLayer1Depth);
-	double minL1, maxL1;
-	cv::minMaxLoc(handLayer1Depth, &minL1, &maxL1, NULL, NULL, handLayer1);
-	cv::normalize(handLayer1Depth, handLayer1Depth, 0, 255, cv::NORM_MINMAX, CV_8UC1, handLayer1);
-	cv::adaptiveThreshold(handLayer1Depth, handLayer1Depth, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 5, 2);
+	/*cv::bitwise_and(maskLayer1, rawDepthFrame, handLayer1Depth);
+	cv::normalize(handLayer1Depth, handLayer1Depth, 0, 255, cv::NORM_MINMAX, CV_8UC1, handLayer1);*/
+	vector<vector<cv::Point>> contours;
+	vector<cv::Vec4i> hierachy;
+	
+	cv::findContours(handLayer1Depth, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+	vector<vector<int>> hull(contours.size());
+	vector<vector<cv::Vec4i>> convex(contours.size());
+	for (int i = 0; i < contours.size(); i++)
+	{
+		cv::convexHull(contours[i], hull[i]);
+		cv::convexityDefects(contours[i], hull[i], convex[i]);
+	}
+	cv::cvtColor(handLayer1Depth, handLayer1Depth, cv::COLOR_GRAY2BGR);
+	for (int i = 0; i < convex.size(); i++)
+	{
+		for (int j = 0; j < convex[i].size(); j++)
+		{
+			cv::Vec4i v = convex[i][j];
+			int depth = v[3];
+			cv::Point startPoint = contours[i][v[0]];
+			cv::Point endPoint = contours[i][v[1]];
+			cv::Point farPoint = contours[i][v[2]];
+
+			if (depth > 1000) {
+				cv::circle(handLayer1Depth, farPoint, 3, cv::Scalar(0, 0, 255), -1);
+			}
+			else {
+				//cv::circle(handLayer1Depth, farPoint, 3, cv::Scalar(0, 255, 0), -1);
+			}
+		}
+	}
+
+	//cv::adaptiveThreshold(handLayer1Depth, handLayer1Depth, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, 3, 2);
 }
 
 void Application::buildHistogram()
@@ -371,6 +401,8 @@ void Application::buildEdgeMask()
 void Application::evaluateHandLayer1() // ~66ms
 {
 	cv::bitwise_and(handLayer1, edgeMask, handLayer1);
+	cv::Mat openningKernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+	cv::morphologyEx(handLayer1, handLayer1, cv::MORPH_OPEN, openningKernel, cv::Point(-1, -1), 2);
 	handLayer1Corners.clear();
 	cv::Mat corner;
 	cv::cornerHarris(handLayer1, corner, 8, 5, 0.04, cv::BORDER_DEFAULT);
