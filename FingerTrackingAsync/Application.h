@@ -46,10 +46,20 @@ protected :
 	const string WINDOW_MASK_L3 = "Mask Layer 3";
 	const string WINDOW_HISTOGRAM = "Histogram";
 
+	const int FINGER_THUMB = 0;
+	const int FINGER_INDEX = 1;
+	const int FINGER_MIDDLE = 2;
+	const int FINGER_RING = 3;
+	const int FINGER_LITTLE = 4;
+	const int PALM_POSITION = 5;
+
 	int64 tickCount = 0;
 	long frameCount = 0;
 	time_t startTimestamp;
 	double estimateFPS;
+
+	map<int, cv::Point> finger2dMap;
+	map<int, cv::Point3i> finger3dMap;
 
 	cv::Mat skinMask;
 	cv::Mat colorFrame;
@@ -97,6 +107,8 @@ protected :
 	void evaluateHandLayerPalm();
 	void evaluate3Layer();
 
+	void assignFingerId();
+
 	void clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh);
 	double calDistance(cv::Point p1, cv::Point p2);
 	cv::Point calCentroid(vector<cv::Point> points);
@@ -110,6 +122,7 @@ protected :
 	cv::Point calLinearPointByX(cv::Vec2d L, double x);
 	cv::Point calLinearPointByY(cv::Vec2d L, double y);
 	void calLinearInterceptCirclePoint(cv::Point center, double radius, cv::Vec2d linear, cv::Point &p_out1, cv::Point &p_out2);
+	cv::Point2d convertPointCartesianToPolar(cv::Point p, cv::Point o = cv::Point(0, 0));
 
 	void captureFrame();
 private:

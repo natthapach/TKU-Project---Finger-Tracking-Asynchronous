@@ -1122,6 +1122,15 @@ void Application::evaluate3Layer()
 	cv::circle(handLayerAbs, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);
 }
 
+void Application::assignFingerId()
+{
+	vector<cv::Point2d> fingerPointL12Polar(fingerPointL12.size());
+	for (int i = 0; i < fingerPointL12.size(); i++)
+	{
+		fingerPointL12Polar[i] = convertPointCartesianToPolar(fingerPointL12[i]);
+	}
+}
+
 void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh)
 {
 	outputArray.clear();
@@ -1374,6 +1383,13 @@ void Application::calLinearInterceptCirclePoint(cv::Point center, double r, cv::
 	p_out1.y = p1_1.y;
 	p_out2.x = p1_2.x;
 	p_out2.y = p1_2.y;
+}
+
+cv::Point2d Application::convertPointCartesianToPolar(cv::Point p, cv::Point o = cv::Point(0, 0))
+{
+	double r = sqrt(pow(p.x - p.x, 2) + pow(p.y - o.y, 2));
+	double t = atan(((double)p.y - o.y) / ((double)p.x - o.x));
+	return cv::Point2d(r, t);
 }
 
 void Application::captureFrame()
