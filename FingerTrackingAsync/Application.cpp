@@ -74,6 +74,8 @@ void Application::start()
 			evaluateHandLayer3();
 			evaluate3Layer();
 
+			assignFingerId();
+
 			/*evaluateHandLayer1();
 			evaluateHandLater2();*/
 				
@@ -400,9 +402,9 @@ void Application::buildEdgeMask()
 
 void Application::evaluateHandLayer1() // ~66ms
 {
-	cv::bitwise_and(handLayer1, edgeMask, handLayer1);
+	/*cv::bitwise_and(handLayer1, edgeMask, handLayer1);
 	cv::Mat openningKernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
-	cv::morphologyEx(handLayer1, handLayer1, cv::MORPH_OPEN, openningKernel, cv::Point(-1, -1), 2);
+	cv::morphologyEx(handLayer1, handLayer1, cv::MORPH_OPEN, openningKernel, cv::Point(-1, -1), 2);*/
 	handLayer1Corners.clear();
 	cv::Mat corner;
 	cv::cornerHarris(handLayer1, corner, 8, 5, 0.04, cv::BORDER_DEFAULT);
@@ -943,13 +945,15 @@ void Application::evaluateHandLayerPalm()
 	if (whiteCenter1 > whiteCenter2) {
 		cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
 		cv::circle(handLayerPalm, center1, handRadius, cv::Scalar(0, 0, 255), 1);
+		palmPoint.x = center1.x;
+		palmPoint.y = center1.y;
 	}
 	else {
 		cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 102, 255), 1);
 		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 102, 255), 1);
+		palmPoint.x = center2.x;
+		palmPoint.y = center2.y;
 	}
-	
-	
 }
 
 void Application::evaluate3Layer()
@@ -1034,9 +1038,6 @@ void Application::evaluate3Layer()
 				inPalm = true;
 			}
 			
-
-			cout << d << " ";
-
 			cv::circle(handLayer2, group[i], 1, cv::Scalar(0, 255, 255), -1);
 
 			if (dp > 1000)
@@ -1046,7 +1047,7 @@ void Application::evaluate3Layer()
 			cv::putText(handLayer2, buffer, cv::Point(group[i].x, group[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.2, cv::Scalar(0, 102, 255), 1);
 			//cv::circle(handLayer2, group[i], abs(d), cv::Scalar(255, 128, 0), 2);
 		}
-		cout << farthestDist << endl;
+
 		fingerL1PointCentroid.push_back(group[farthestIndexC]);
 		fingerL1Point.push_back(group[farthestIndex]);
 		fingerL1PointMultiple.push_back(group[farthestIndexM]);
@@ -1125,9 +1126,51 @@ void Application::evaluate3Layer()
 void Application::assignFingerId()
 {
 	vector<cv::Point2d> fingerPointL12Polar(fingerPointL12.size());
+	vector<cv::Point3f> fingerPoint3d(fingerPointL12.size());
+	FingerSorter fingerSorter;
+	fingerSorter.origin = palmPoint;
+	sort(fingerPointL12.begin(), fingerPointL12.end(), fingerSorter);
 	for (int i = 0; i < fingerPointL12.size(); i++)
 	{
 		fingerPointL12Polar[i] = convertPointCartesianToPolar(fingerPointL12[i]);
+		fingerPoint3d[i] = convertPoint2dTo3D(fingerPointL12[i]);
+	}
+
+	string fingerNames[] = {
+		"Middle", "Ring", "Little", "Thumb", "Index"
+	};
+	int fingerIds[] = {
+		FINGER_MIDDLE, FINGER_RING, FINGER_LITTLE, FINGER_THUMB, FINGER_INDEX
+	};
+
+	for (int i = 0; i < fingerPoint3d.size(); i++)
+	{
+		cv::Point3f p = fingerPoint3d[i];
+		char buffer[100];
+		sprintf_s(buffer, "(%.2f, %.2f, %.2f)", p.x, p.y, p.z);
+		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+	}
+	
+	if (palmPoint.x == 0 || palmPoint.y == 0)
+		return;
+
+	palmPoint3d = convertPoint2dTo3D(palmPoint);
+	char buffer[100];
+	sprintf_s(buffer, "(%.2f, %.2f, %.2f)", palmPoint3d.x, palmPoint3d.y, palmPoint3d.z);
+	cv::putText(handLayerAbs, buffer, cv::Point(palmPoint.x, palmPoint.y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
+	for (int i = 0; i < fingerPointL12.size() && i < 5; i++)
+	{
+		finger3dMap[fingerIds[i]] = fingerPoint3d[i];
+		/*char buffer[10];
+		sprintf_s(buffer, "%s", fingerNames[i].c_str());
+		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);*/
+	}
+	finger3dMap[PALM_POSITION] = palmPoint3d;
+
+	for (int i = 0; i < 6; i++)
+	{
+		cv::Point3f p = finger3dMap[i];
+		cout << "(" << p.x << ", " << p.y << ", " << p.z << ")" << endl;
 	}
 }
 
@@ -1385,11 +1428,36 @@ void Application::calLinearInterceptCirclePoint(cv::Point center, double r, cv::
 	p_out2.y = p1_2.y;
 }
 
-cv::Point2d Application::convertPointCartesianToPolar(cv::Point p, cv::Point o = cv::Point(0, 0))
+cv::Point2d Application::convertPointCartesianToPolar(cv::Point p, cv::Point o)
 {
 	double r = sqrt(pow(p.x - p.x, 2) + pow(p.y - o.y, 2));
 	double t = atan(((double)p.y - o.y) / ((double)p.x - o.x));
 	return cv::Point2d(r, t);
+}
+
+cv::Point3f Application::convertPoint2dTo3D(cv::Point p)
+{
+	int x=0, y=0, z=0;
+	//find min z
+	for (int j = p.y-1; j <= p.y + 1; j++)
+	{
+		if (j < 0 || j >= 480)
+			continue;
+		for (int i = p.x-1; i <= p.x+1; i++)
+		{
+			if (i < 0 || i >= 640)
+				continue;
+			int zij = rawDepthFrame.at<ushort>(j, i);
+			if ((zij != 0 && zij < z) || z == 0) {
+				x = i;
+				y = j;
+				z = zij;
+			}
+		}
+	}
+	float wx, wy, wz;
+	kinectReader.convertDepthToWorld(x, y, z, &wx, &wy, &wz);
+	return cv::Point3f(wx, wy, wz);
 }
 
 void Application::captureFrame()

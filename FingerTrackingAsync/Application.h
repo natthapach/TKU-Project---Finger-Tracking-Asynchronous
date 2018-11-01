@@ -59,7 +59,7 @@ protected :
 	double estimateFPS;
 
 	map<int, cv::Point> finger2dMap;
-	map<int, cv::Point3i> finger3dMap;
+	map<int, cv::Point3f> finger3dMap;
 
 	cv::Mat skinMask;
 	cv::Mat colorFrame;
@@ -80,6 +80,7 @@ protected :
 	int handRadius;
 
 	cv::Point palmPoint = cv::Point(0, 0);
+	cv::Point3f palmPoint3d;
 	vector<cv::Point> handLayer1Corners;
 	vector<vector<cv::Point>> contoursL1;
 	map<int, vector<cv::Point>> cornerGroup;
@@ -123,12 +124,36 @@ protected :
 	cv::Point calLinearPointByY(cv::Vec2d L, double y);
 	void calLinearInterceptCirclePoint(cv::Point center, double radius, cv::Vec2d linear, cv::Point &p_out1, cv::Point &p_out2);
 	cv::Point2d convertPointCartesianToPolar(cv::Point p, cv::Point o = cv::Point(0, 0));
+	cv::Point3f convertPoint2dTo3D(cv::Point p);
 
 	void captureFrame();
 private:
 	KinectReader kinectReader;
 	void calculateContourArea(vector<cv::Point> contour, double *area);
 	int performKeyboardEvent(int key);
+
+	struct FingerSorter {
+		cv::Point origin = cv::Point(0, 0);
+		bool operator() (cv::Point p1, cv::Point p2) {
+			cv::Point pi = cv::Point(p1.x - origin.x, p1.y - origin.y);
+			cv::Point pj = cv::Point(p2.x - origin.x, p2.y - origin.y);
+			double t1, t2;
+			if (pi.x == 0) {
+				t1 = 0;
+			}
+			else {
+				t1 = atan((double)pi.y / pi.x);
+			}
+			
+			if (pj.x == 0) {
+				t2 = 0;
+			}
+			else {
+				t2 = atan((double)pj.y / pj.x);
+			}
+			return t1 < t2;
+		}
+	};
 
 	struct ConvexSorter {
 		cv::Point origin;

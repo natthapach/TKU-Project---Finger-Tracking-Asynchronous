@@ -25,7 +25,7 @@ public :
 	int getHandRadius(int mm);
 
 	void convertDepthToColor(int x, int y, int z, int *cx, int *cy);
-
+	void convertDepthToWorld(float x, float y, float z, float *wx, float *wy, float *wz);
 protected :
 	const int RANGE = 100;
 	openni::Device device;
