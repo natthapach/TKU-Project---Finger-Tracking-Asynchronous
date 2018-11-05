@@ -935,12 +935,7 @@ void Application::evaluateHandLayerPalm()
 	cv::rectangle(handLayerPalm, boundingBox, cv::Scalar(0, 255, 0), 2);
 	
 
-	for (int i = 0; i < concavePoints.size(); i++)
-	{
-		cv::Point concave = concavePoints[i];
-		cv::circle(handLayerPalm, concave, 4, cv::Scalar(0, 102, 255), 2);
-		//cv::line(handLayerPalm, cv::Point(concave.x, boundingBox.y), cv::Point(concave.x, boundingBox.y + boundingBox.height), cv::Scalar(0, 102, 255), 2);
-	}
+	
 
 	if (whiteCenter1 > whiteCenter2) {
 		cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
@@ -954,6 +949,57 @@ void Application::evaluateHandLayerPalm()
 		palmPoint.x = center2.x;
 		palmPoint.y = center2.y;
 	}
+
+	// find wrist point
+	cv::Point wristPoint = cv::Point(0, 0);
+	for (int i = 0; i < concavePoints.size(); i++)
+	{
+		if (concavePoints[i].x < palmPoint.x && concavePoints[i].y > wristPoint.y)
+			wristPoint = concavePoints[i];
+	}
+
+	double wristAngle = calAnglePoint(palmPoint, wristPoint);
+
+	for (int i = 0; i < concavePoints.size(); i++)
+	{
+		cv::Point concave = concavePoints[i];
+		
+		//cv::line(handLayerPalm, cv::Point(concave.x, boundingBox.y), cv::Point(concave.x, boundingBox.y + boundingBox.height), cv::Scalar(0, 102, 255), 2);
+		cv::Point2d concavePolar = convertPointCartesianToPolar(concave, palmPoint);
+		
+		double theta = calAnglePoint(palmPoint, concave);
+
+		if (theta > PI)
+			cv::circle(handLayerPalm, concave, 6, cv::Scalar(0, 255, 255), 2);
+		
+		cout << "concave angle " << theta << ":" << theta-wristAngle << endl;
+
+		int border = 2;
+		if (abs(theta) > PI / 2)
+			border = -1;
+		if (theta < 0) {
+			cv::circle(handLayerPalm, concave, 4, cv::Scalar(0, 0, 255), border);
+		}
+		else {
+			cv::circle(handLayerPalm, concave, 4, cv::Scalar(0, 102, 255), border);
+		}
+
+		cv::Point endPoint1 = calRadiusPoint(theta, handRadius, palmPoint);
+		cv::circle(handLayerPalm, wristPoint, 4, cv::Scalar(0, 255, 0), -1);
+		//cv::line(handLayerPalm, palmPoint, endPoint1, cv::Scalar(0, 255, 0), 2);
+	}
+
+	double estimateAngle[] = {
+		-3.0, -3.5, 2.4, 1.3, -0.7
+	};
+	for (int i = 0; i < 5; i++)
+	{
+		cv::Point endPoint = calRadiusPoint(estimateAngle[i] + wristAngle, handRadius, palmPoint);
+		cv::line(handLayerPalm, palmPoint, endPoint, cv::Scalar(0, i * 50, 255), 2);
+	}
+	cv::line(handLayerPalm, palmPoint, wristPoint, cv::Scalar(0, 255, 0), 2);
+
+	cv::circle(handLayerPalm, wristPoint, 4, cv::Scalar(0, 255, 0), -1);
 }
 
 void Application::evaluate3Layer()
@@ -1458,6 +1504,39 @@ cv::Point3f Application::convertPoint2dTo3D(cv::Point p)
 	float wx, wy, wz;
 	kinectReader.convertDepthToWorld(x, y, z, &wx, &wy, &wz);
 	return cv::Point3f(wx, wy, wz);
+}
+
+cv::Point Application::calRadiusPoint(double angle, double radius, cv::Point origin)
+{
+	double k = radius * sin(angle);
+	double h = sqrt(pow(radius, 2) - pow(k, 2));
+	
+	int y = origin.y + k;
+	int x;
+	if (angle > PI / 2 || angle < -PI / 2)
+		x = origin.x - h;
+	else
+		x = origin.x + h;
+	
+	return cv::Point(x, y);
+}
+
+double Application::calAnglePoint(cv::Point origin, cv::Point p)
+{
+	double theta = 0;
+	double h = (p.x - origin.x);
+	double k = (p.y - origin.y);
+	//theta = asin(k / sqrt(pow(k, 2) + pow(h, 2)));
+	if (h >= 0) {
+		if (h == 0 && k == 0)
+			theta = 0;
+		else
+			theta = asin(k / sqrt(pow(k, 2) + pow(h, 2)));
+	}
+	else {
+		theta = PI - asin(k / sqrt(pow(k, 2) + pow(h, 2)));
+	}
+	return theta;
 }
 
 void Application::captureFrame()

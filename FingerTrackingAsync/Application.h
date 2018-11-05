@@ -125,6 +125,8 @@ protected :
 	void calLinearInterceptCirclePoint(cv::Point center, double radius, cv::Vec2d linear, cv::Point &p_out1, cv::Point &p_out2);
 	cv::Point2d convertPointCartesianToPolar(cv::Point p, cv::Point o = cv::Point(0, 0));
 	cv::Point3f convertPoint2dTo3D(cv::Point p);
+	cv::Point calRadiusPoint(double angle, double radius, cv::Point origin);
+	double calAnglePoint(cv::Point origin, cv::Point p);
 
 	void captureFrame();
 private:
