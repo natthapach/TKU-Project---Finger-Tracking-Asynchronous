@@ -76,7 +76,8 @@ cv::Mat KinectReader::getDepthFrame()
 	if (readDepthThread.joinable())
 		readDepthThread.join();
 	depthFrame = cv::Mat(480, 640, CV_8UC3, &img);
-	depthHandMask = cv::Mat(480, 640, CV_8UC1, &mask);
+	cv::flip(depthFrame, depthFrame, 1);
+	
 	return depthFrame;
 }
 
@@ -90,12 +91,16 @@ cv::Mat KinectReader::getRGBFrame()
 
 cv::Mat KinectReader::getDepthHandMask()
 {
+	depthHandMask = cv::Mat(480, 640, CV_8UC1, &mask);
+	cv::flip(depthHandMask, depthHandMask, 1);
 	return depthHandMask;
 }
 
 cv::Mat KinectReader::getRawDepthFrame()
 {
-	return cv::Mat(480, 640, CV_16UC1, &depthRaw);
+	cv::Mat rawDepthFrame = cv::Mat(480, 640, CV_16UC1, &depthRaw);
+	cv::flip(rawDepthFrame, rawDepthFrame, 1);
+	return rawDepthFrame;
 }
 
 bool KinectReader::isHandTracking()

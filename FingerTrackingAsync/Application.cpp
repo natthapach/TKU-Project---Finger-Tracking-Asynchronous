@@ -1194,6 +1194,7 @@ void Application::assignFingerId()
 		cv::Point3f p = fingerPoint3d[i];
 		char buffer[100];
 		sprintf_s(buffer, "(%.2f, %.2f, %.2f)", p.x, p.y, p.z);
+		printf("(%.2f, %.2f, %.2f)\n", p.x, p.y, p.z);
 		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
 	}
 	
