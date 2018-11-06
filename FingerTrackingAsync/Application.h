@@ -1,5 +1,6 @@
 #pragma once
 #include "KinectReader.h"
+#include "AdapterCaller.h"
 #define _USE_MATH_DEFINES
 #include <cmath>
 #define PI 3.14159265
@@ -8,7 +9,18 @@ class Application {
 public :
 	int initialize();
 	void start();
+
+	const int FINGER_THUMB = 0;
+	const int FINGER_INDEX = 1;
+	const int FINGER_MIDDLE = 2;
+	const int FINGER_RING = 3;
+	const int FINGER_LITTLE = 4;
+	const int PALM_POSITION = 5;
+
+	void setAdapterCaller(AdapterCaller adapterCaller);
 protected :
+	AdapterCaller adapterCaller;
+
 	ushort maxDepth = 65535;
 	ushort minDepth = 0;
 
@@ -46,12 +58,7 @@ protected :
 	const string WINDOW_MASK_L3 = "Mask Layer 3";
 	const string WINDOW_HISTOGRAM = "Histogram";
 
-	const int FINGER_THUMB = 0;
-	const int FINGER_INDEX = 1;
-	const int FINGER_MIDDLE = 2;
-	const int FINGER_RING = 3;
-	const int FINGER_LITTLE = 4;
-	const int PALM_POSITION = 5;
+	
 
 	int64 tickCount = 0;
 	long frameCount = 0;
@@ -59,7 +66,8 @@ protected :
 	double estimateFPS;
 
 	map<int, cv::Point> finger2dMap;
-	map<int, cv::Point3f> finger3dMap;
+	map<int, cv::Point3f> finger3dMap; // deprecate
+	vector<cv::Point3f> finger3ds = vector<cv::Point3f>(6, cv::Point3f(0, 0, 0));
 
 	cv::Mat skinMask;
 	cv::Mat colorFrame;

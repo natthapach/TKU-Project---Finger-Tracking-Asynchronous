@@ -12,8 +12,7 @@ using namespace std;
 
 class AdapterCaller {
 public :
-	void testSend(int n);
-	int sendData(map<int, cv::Point3f> points);
+	int sendData(vector<cv::Point3f> points);
 protected :
 	const char *HOST = "127.0.0.1";
 	const char *PORT = "8085";

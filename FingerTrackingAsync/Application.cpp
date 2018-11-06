@@ -76,6 +76,7 @@ void Application::start()
 
 			assignFingerId();
 
+			adapterCaller.sendData(finger3ds);
 			/*evaluateHandLayer1();
 			evaluateHandLater2();*/
 				
@@ -109,6 +110,11 @@ void Application::start()
 	}
 	
 	cv::destroyAllWindows();
+}
+
+void Application::setAdapterCaller(AdapterCaller adapterCaller)
+{
+	this->adapterCaller = adapterCaller;
 }
 
 void Application::transformColorFrame()
@@ -1208,11 +1214,13 @@ void Application::assignFingerId()
 	for (int i = 0; i < fingerPointL12.size() && i < 5; i++)
 	{
 		finger3dMap[fingerIds[i]] = fingerPoint3d[i];
+		finger3ds[fingerIds[i]] = fingerPoint3d[i];
 		/*char buffer[10];
 		sprintf_s(buffer, "%s", fingerNames[i].c_str());
 		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);*/
 	}
 	finger3dMap[PALM_POSITION] = palmPoint3d;
+	finger3ds[PALM_POSITION] = palmPoint3d;
 
 	for (int i = 0; i < 6; i++)
 	{
