@@ -1199,10 +1199,10 @@ void Application::assignFingerId()
 	for (int i = 0; i < fingerPoint3d.size(); i++)
 	{
 		cv::Point3f p = fingerPoint3d[i];
-		char buffer[100];
+		/*char buffer[100];
 		sprintf_s(buffer, "(%.2f, %.2f, %.2f)", p.x, p.y, p.z);
 		printf("(%.2f, %.2f, %.2f)\n", p.x, p.y, p.z);
-		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);*/
 	}
 	
 	if (palmPoint.x == 0 || palmPoint.y == 0)
@@ -1216,9 +1216,9 @@ void Application::assignFingerId()
 	{
 		finger3dMap[fingerIds[i]] = fingerPoint3d[i];
 		finger3ds[fingerIds[i]] = fingerPoint3d[i];
-		/*char buffer[10];
+		char buffer[10];
 		sprintf_s(buffer, "%s", fingerNames[i].c_str());
-		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);*/
+		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
 	}
 	finger3dMap[PALM_POSITION] = palmPoint3d;
 	finger3ds[PALM_POSITION] = palmPoint3d;
