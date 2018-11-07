@@ -76,7 +76,8 @@ void Application::start()
 
 			assignFingerId();
 
-			adapterCaller.sendData(finger3ds);
+			//adapterCaller.sendData(finger3ds);
+			thread(&Application::sendData, this).detach();
 			/*evaluateHandLayer1();
 			evaluateHandLater2();*/
 				
@@ -1546,6 +1547,11 @@ double Application::calAnglePoint(cv::Point origin, cv::Point p)
 		theta = PI - asin(k / sqrt(pow(k, 2) + pow(h, 2)));
 	}
 	return theta;
+}
+
+void Application::sendData()
+{
+	adapterCaller.sendData(finger3ds);
 }
 
 void Application::captureFrame()

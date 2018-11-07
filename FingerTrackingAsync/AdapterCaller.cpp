@@ -90,7 +90,7 @@ int AdapterCaller::sendData(vector<cv::Point3f> points)
 		bufferPtr[i] = buffer_small;
 	}
 	
-	const char *format = "{%d:(%.2f, %.2f, %.2f)},"
+	const char *format = "{%d:(%.2f, %.2f, %.2f),"
 		"%d:(%.2f, %.2f, %.2f),"
 		"%d:(%.2f, %.2f, %.2f),"
 		"%d:(%.2f, %.2f, %.2f),"

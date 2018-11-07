@@ -136,6 +136,8 @@ protected :
 	cv::Point calRadiusPoint(double angle, double radius, cv::Point origin);
 	double calAnglePoint(cv::Point origin, cv::Point p);
 
+	void sendData();
+
 	void captureFrame();
 private:
 	KinectReader kinectReader;
