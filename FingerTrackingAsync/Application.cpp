@@ -728,20 +728,30 @@ void Application::evaluateHandLayerPalm()
 	vector<cv::Point> maxContour = contoursx[max_index];
 	cv::Rect box = cv::boundingRect(maxContour);
 
+	cv::Point hightestP;
+	int hightestY = 480;
+	for (int i = 0; i < maxContour.size(); i++)
+	{
+		if (maxContour[i].y < hightestY) {
+			hightestY = maxContour[i].y;
+			hightestP = maxContour[i];
+		}
+	}
+
 	cv::Point medianP = calMedianPoint(cv::Point(box.x, box.y), cv::Point(box.x + box.width, box.y));
-	cv::Vec2d L = calLinear(medianP, handPoint);
+	cv::Vec2d L = calLinear(hightestP, handPoint);
 
 	cv::Point pe1, pe2;
 	calEndpoint(L, pe1, pe2);
 
-	double d_top2hand = calDistance(medianP, handPoint);
+	double d_top2hand = calDistance(hightestP, handPoint);
 	double d_hand2palm = 2 * d_top2hand - 80;
 	
 	cv::Point pp1, pp2;
 	calLinearInterceptCirclePoint(handPoint, d_hand2palm, L, pp1, pp2);
 
-	double d_pp1 = calDistance(pp1, medianP);
-	double d_pp2 = calDistance(pp2, medianP);
+	double d_pp1 = calDistance(pp1, hightestP);
+	double d_pp2 = calDistance(pp2, hightestP);
 
 	cv::Point pp;
 	if (d_pp1 > d_pp2) {
@@ -756,7 +766,7 @@ void Application::evaluateHandLayerPalm()
 	
 	cv::rectangle(handLayerPalm, box, cv::Scalar(0, 255, 0), 2);
 	cv::line(handLayerPalm, pe1, pe2, cv::Scalar(255, 0, 0), 2);
-	cv::circle(handLayerPalm, medianP, 4, cv::Scalar(0, 255, 0), -1);
+	cv::circle(handLayerPalm, hightestP, 4, cv::Scalar(0, 255, 0), -1);
 	cv::circle(handLayerPalm, handPoint, 4, cv::Scalar(0, 102, 255), -1);
 	cv::circle(handLayerPalm, pp1, 4, cv::Scalar(0, 0, 255), -1);
 	cv::circle(handLayerPalm, pp2, 4, cv::Scalar(0, 0, 255), -1);
@@ -1667,7 +1677,7 @@ void Application::captureFrame()
 	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
 	cv::imwrite(buffer_concat, concat);*/
 	char buffer_1[80], buffer_2[80], buffer_3[80], buffer_4[80];
-	sprintf_s(buffer_1, "%d - Hand Point.jpg", ts);
+	sprintf_s(buffer_1, "%d - Hightest Point.jpg", ts);
 	sprintf_s(buffer_2, "%d - HL1_CON.jpg", ts);
 	sprintf_s(buffer_3, "%d - HL1_COR_G.jpg", ts);
 	sprintf_s(buffer_4, "%d - HL1.jpg", ts);
