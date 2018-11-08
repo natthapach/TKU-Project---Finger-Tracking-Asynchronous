@@ -997,9 +997,9 @@ void Application::evaluateHandLayerPalm()
 	}
 
 	double estimateAngle[] = {
-		-3.0, -3.5, 2.4, 1.3, -0.7
+		3.5, 2.8, 2.2, 1.3
 	};
-	for (int i = 0; i < 5; i++)
+	for (int i = 0; i < 4; i++)
 	{
 		cv::Point endPoint = calRadiusPoint(estimateAngle[i] + wristAngle, handRadius, palmPoint);
 		cv::line(handLayerPalm, palmPoint, endPoint, cv::Scalar(0, i * 50, 255), 2);
@@ -1518,15 +1518,36 @@ cv::Point3f Application::convertPoint2dTo3D(cv::Point p)
 
 cv::Point Application::calRadiusPoint(double angle, double radius, cv::Point origin)
 {
-	double k = radius * sin(angle);
-	double h = sqrt(pow(radius, 2) - pow(k, 2));
+	double k, h, x, y;
 	
-	int y = origin.y + k;
-	int x;
-	if (angle > PI / 2 || angle < -PI / 2)
+	if (angle < 0.5*PI) {
+		// Q3
+		h = radius * sin(angle);
+		k = radius * cos(angle);
 		x = origin.x - h;
-	else
+		y = origin.y + k;
+	}
+	else if (angle < PI) {
+		// Q2
+		k = radius * sin(angle - 0.5*PI);
+		h = radius * cos(angle - 0.5*PI);
+		x = origin.x - h;
+		y = origin.y - k;
+	}
+	else if (angle < 1.5*PI) {
+		// Q1
+		h = radius * sin(angle - PI);
+		k = radius * cos(angle - PI);
 		x = origin.x + h;
+		y = origin.y - k;
+	}
+	else {
+		// Q4
+		k = radius * sin(angle - 1.5*PI);
+		h = radius * cos(angle - 1.5*PI);
+		x = origin.x + h;
+		y = origin.y + k;
+	}
 	
 	return cv::Point(x, y);
 }
