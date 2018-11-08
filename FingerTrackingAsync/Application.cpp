@@ -823,31 +823,24 @@ void Application::evaluateHandLayerPalm()
 	}
 
 
+	cv::Point abs_pp;
+	if (concave.size() > 2) {
+		abs_pp = interceptCentroid;
+	}
+	else {
+		abs_pp = pp;
+	}
+
 	cv::cvtColor(handLayerPalm, handLayerPalm, cv::COLOR_GRAY2BGR);
-	
-	for (int i = 0; i < concave.size(); i++)
-	{
-		int fill = 2;
-		if (i == edgeIndex1 || i == edgeIndex2)
-			fill = -1;
-		cv::circle(handLayerPalm, concave[i], 4, cv::Scalar(0, 102, 255), fill);
-	}
 
-	for (int i = 0; i < intercepts.size(); i++)
-	{
-		cv::circle(handLayerPalm, intercepts[i], 4, cv::Scalar(0, 255, 0), -1);
-	}
-
-	cv::circle(handLayerPalm, interceptCentroid, 4, cv::Scalar(0, 0, 255), -1);
+	/*cv::circle(handLayerPalm, interceptCentroid, 4, cv::Scalar(0, 0, 255), -1);
 	cv::circle(handLayerPalm, interceptCentroid, handRadius, cv::Scalar(0, 0, 255), 2);
-	/*cv::rectangle(handLayerPalm, box, cv::Scalar(0, 255, 0), 2);
-	cv::line(handLayerPalm, pe1, pe2, cv::Scalar(255, 0, 0), 2);
-	cv::circle(handLayerPalm, hightestP, 4, cv::Scalar(0, 255, 0), -1);
-	cv::circle(handLayerPalm, handPoint, 4, cv::Scalar(0, 102, 255), -1);
-	cv::circle(handLayerPalm, pp1, 4, cv::Scalar(0, 0, 255), -1);
-	cv::circle(handLayerPalm, pp2, 4, cv::Scalar(0, 0, 255), -1);
+
+	cv::circle(handLayerPalm, pp, 4, cv::Scalar(0, 102, 255), -1);
 	cv::circle(handLayerPalm, pp, handRadius, cv::Scalar(0, 102, 255), 2);*/
 	
+	cv::circle(handLayerPalm, abs_pp, 4, cv::Scalar(0, 255, 0), -1);
+	cv::circle(handLayerPalm, abs_pp, handRadius, cv::Scalar(0, 255, 0), 2);
 	return;
 	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
 	//cv::morphologyEx(handLayerPalm, handLayerPalm, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 3);
@@ -1753,7 +1746,7 @@ void Application::captureFrame()
 	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
 	cv::imwrite(buffer_concat, concat);*/
 	char buffer_1[80], buffer_2[80], buffer_3[80], buffer_4[80];
-	sprintf_s(buffer_1, "%d - concave-centroid.jpg", ts);
+	sprintf_s(buffer_1, "%d - both-result.jpg", ts);
 	sprintf_s(buffer_2, "%d - HL1_CON.jpg", ts);
 	sprintf_s(buffer_3, "%d - HL1_COR_G.jpg", ts);
 	sprintf_s(buffer_4, "%d - HL1.jpg", ts);
