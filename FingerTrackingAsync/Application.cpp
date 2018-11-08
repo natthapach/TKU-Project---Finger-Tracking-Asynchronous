@@ -1190,10 +1190,10 @@ void Application::assignFingerId()
 	}
 
 	string fingerNames[] = {
-		"Middle", "Ring", "Little", "Thumb", "Index"
+		"Thumb", "Index", "Middle", "Ring", "Little"
 	};
 	int fingerIds[] = {
-		FINGER_MIDDLE, FINGER_RING, FINGER_LITTLE, FINGER_THUMB, FINGER_INDEX
+		FINGER_THUMB, FINGER_INDEX, FINGER_MIDDLE, FINGER_RING, FINGER_LITTLE
 	};
 
 	for (int i = 0; i < fingerPoint3d.size(); i++)
@@ -1534,18 +1534,32 @@ cv::Point Application::calRadiusPoint(double angle, double radius, cv::Point ori
 double Application::calAnglePoint(cv::Point origin, cv::Point p)
 {
 	double theta = 0;
-	double h = (p.x - origin.x);
-	double k = (p.y - origin.y);
-	//theta = asin(k / sqrt(pow(k, 2) + pow(h, 2)));
-	if (h >= 0) {
-		if (h == 0 && k == 0)
-			theta = 0;
-		else
-			theta = asin(k / sqrt(pow(k, 2) + pow(h, 2)));
+	double h = abs(p.x - origin.x);
+	double k = abs(p.y - origin.y);
+
+	// Q3 > Q2 > Q1 > Q4
+
+	if (p.x <= origin.x) {
+		if (p.y <= origin.y) {
+			// Quadrand Pixel Space 2
+			theta = (0.5*PI) + atan(k / h);
+		}
+		else {
+			// Q3
+			theta = atan(h / k);
+		}
 	}
 	else {
-		theta = PI - asin(k / sqrt(pow(k, 2) + pow(h, 2)));
+		if (p.y <= origin.y) {
+			// Q1
+			theta = PI + atan(h / k);
+		}
+		else {
+			// Q4
+			theta = (1.5*PI) + atan(k / h);
+		}
 	}
+	
 	return theta;
 }
 

@@ -134,7 +134,7 @@ protected :
 	cv::Point2d convertPointCartesianToPolar(cv::Point p, cv::Point o = cv::Point(0, 0));
 	cv::Point3f convertPoint2dTo3D(cv::Point p);
 	cv::Point calRadiusPoint(double angle, double radius, cv::Point origin);
-	double calAnglePoint(cv::Point origin, cv::Point p);
+	static double calAnglePoint(cv::Point origin, cv::Point p);
 
 	void sendData();
 
@@ -147,7 +147,7 @@ private:
 	struct FingerSorter {
 		cv::Point origin = cv::Point(0, 0);
 		bool operator() (cv::Point p1, cv::Point p2) {
-			cv::Point pi = cv::Point(p1.x - origin.x, p1.y - origin.y);
+			/*cv::Point pi = cv::Point(p1.x - origin.x, p1.y - origin.y);
 			cv::Point pj = cv::Point(p2.x - origin.x, p2.y - origin.y);
 			double t1, t2;
 			if (pi.x == 0) {
@@ -163,6 +163,10 @@ private:
 			else {
 				t2 = atan((double)pj.y / pj.x);
 			}
+			return t1 < t2;*/
+
+			double t1 = calAnglePoint(origin, p1);
+			double t2 = calAnglePoint(origin, p2);
 			return t1 < t2;
 		}
 	};
