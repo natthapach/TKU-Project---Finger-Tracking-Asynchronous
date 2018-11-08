@@ -706,9 +706,62 @@ void Application::evaluateHandLayer3()
 void Application::evaluateHandLayerPalm()
 {
 	handLayer3.copyTo(handLayerPalm);
+
+	vector<vector<cv::Point>> contoursx;
+	vector<cv::Vec4i> hierachyx;
+	cv::findContours(handLayerPalm, contoursx, hierachyx, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+
+	double max_area = 0;
+	int max_index = -1;
+
+	for (int i = 0; i < contoursx.size(); i++)
+	{
+		double a = cv::contourArea(contoursx[i]);
+		if (a > max_area) {
+			max_area = a;
+			max_index = i;
+		}
+	}
+
+	if (max_index == -1) return;
+
+	vector<cv::Point> maxContour = contoursx[max_index];
+	cv::Rect box = cv::boundingRect(maxContour);
+
+	cv::Point medianP = calMedianPoint(cv::Point(box.x, box.y), cv::Point(box.x + box.width, box.y));
+	cv::Vec2d L = calLinear(medianP, handPoint);
+
+	cv::Point pe1, pe2;
+	calEndpoint(L, pe1, pe2);
+
+	double d_top2hand = calDistance(medianP, handPoint);
+	double d_hand2palm = 2 * d_top2hand - 80;
+	
+	cv::Point pp1, pp2;
+	calLinearInterceptCirclePoint(handPoint, d_hand2palm, L, pp1, pp2);
+
+	double d_pp1 = calDistance(pp1, medianP);
+	double d_pp2 = calDistance(pp2, medianP);
+
+	cv::Point pp;
+	if (d_pp1 > d_pp2) {
+		pp = pp1;
+	}
+	else {
+		pp = pp2;
+	}
+
+
 	cv::cvtColor(handLayerPalm, handLayerPalm, cv::COLOR_GRAY2BGR);
+	
+	cv::rectangle(handLayerPalm, box, cv::Scalar(0, 255, 0), 2);
+	cv::line(handLayerPalm, pe1, pe2, cv::Scalar(255, 0, 0), 2);
+	cv::circle(handLayerPalm, medianP, 4, cv::Scalar(0, 255, 0), -1);
 	cv::circle(handLayerPalm, handPoint, 4, cv::Scalar(0, 102, 255), -1);
-	cv::circle(handLayerPalm, handPoint, handRadius, cv::Scalar(0, 102, 255), 2);
+	cv::circle(handLayerPalm, pp1, 4, cv::Scalar(0, 0, 255), -1);
+	cv::circle(handLayerPalm, pp2, 4, cv::Scalar(0, 0, 255), -1);
+	cv::circle(handLayerPalm, pp, handRadius, cv::Scalar(0, 102, 255), 2);
+	
 	return;
 	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
 	//cv::morphologyEx(handLayerPalm, handLayerPalm, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 3);
