@@ -727,7 +727,68 @@ void Application::evaluateHandLayerPalm()
 
 	vector<cv::Point> maxContour = contoursx[max_index];
 	cv::Rect box = cv::boundingRect(maxContour);
+	vector<int> hull;
+	cv::convexHull(maxContour, hull);
+	vector<cv::Vec4i> convex;
+	cv::convexityDefects(maxContour, hull, convex);
+	vector<cv::Point> concave;
+	for (int i = 0; i < convex.size(); i++)
+	{
+		cv::Vec4i v = convex[i];
+		int depth = v[3];
+		if (depth < CONVEX_DEPTH_THRESHOLD_LAYER_3)
+			continue;
+		cv::Point farPoint = maxContour[v[2]];
+		concave.push_back(farPoint);
+	}
 
+	double maxConcaveDistance = 0;
+	int edgeIndex1 = -1, edgeIndex2 = -1;
+
+	for (int i = 0; i < concave.size(); i++)
+	{
+		for (int j = i+1; j < concave.size(); j++)
+		{
+			double d = calDistance(concave[i], concave[j]);
+			if (d > maxConcaveDistance) {
+				maxConcaveDistance = d;
+				edgeIndex1 = i;
+				edgeIndex2 = j;
+			}
+		}
+	}
+
+	vector<cv::Point> intercepts;
+
+	if (edgeIndex1 != -1 && edgeIndex2 != -1) {
+		cv::Point e1 = concave[edgeIndex1];
+		cv::Point e2 = concave[edgeIndex2];
+
+		for (int i = 0; i < concave.size(); i++)
+		{
+			if (i == edgeIndex1 || i == edgeIndex2)
+				continue;
+			cv::Point ci = concave[i];
+
+			cv::Vec2d l1 = calLinear(ci, e1);
+			cv::Vec2d l2 = calLinear(ci, e2);
+			
+			cv::Point m1 = calMedianPoint(ci, e1);
+			cv::Point m2 = calMedianPoint(ci, e2);
+
+			cv::Vec2d lp1 = calPerpendicularLine(l1, m1);
+			cv::Vec2d lp2 = calPerpendicularLine(l2, m2);
+
+			cv::Point intercept = calInterceptPoint(lp1, lp2);
+
+			intercepts.push_back(intercept);
+		}
+	}
+
+	cv::Point interceptCentroid = calCentroid(intercepts);
+	
+
+	// *****************************
 	cv::Point hightestP;
 	int hightestY = 480;
 	for (int i = 0; i < maxContour.size(); i++)
@@ -764,13 +825,28 @@ void Application::evaluateHandLayerPalm()
 
 	cv::cvtColor(handLayerPalm, handLayerPalm, cv::COLOR_GRAY2BGR);
 	
-	cv::rectangle(handLayerPalm, box, cv::Scalar(0, 255, 0), 2);
+	for (int i = 0; i < concave.size(); i++)
+	{
+		int fill = 2;
+		if (i == edgeIndex1 || i == edgeIndex2)
+			fill = -1;
+		cv::circle(handLayerPalm, concave[i], 4, cv::Scalar(0, 102, 255), fill);
+	}
+
+	for (int i = 0; i < intercepts.size(); i++)
+	{
+		cv::circle(handLayerPalm, intercepts[i], 4, cv::Scalar(0, 255, 0), -1);
+	}
+
+	cv::circle(handLayerPalm, interceptCentroid, 4, cv::Scalar(0, 0, 255), -1);
+	cv::circle(handLayerPalm, interceptCentroid, handRadius, cv::Scalar(0, 0, 255), 2);
+	/*cv::rectangle(handLayerPalm, box, cv::Scalar(0, 255, 0), 2);
 	cv::line(handLayerPalm, pe1, pe2, cv::Scalar(255, 0, 0), 2);
 	cv::circle(handLayerPalm, hightestP, 4, cv::Scalar(0, 255, 0), -1);
 	cv::circle(handLayerPalm, handPoint, 4, cv::Scalar(0, 102, 255), -1);
 	cv::circle(handLayerPalm, pp1, 4, cv::Scalar(0, 0, 255), -1);
 	cv::circle(handLayerPalm, pp2, 4, cv::Scalar(0, 0, 255), -1);
-	cv::circle(handLayerPalm, pp, handRadius, cv::Scalar(0, 102, 255), 2);
+	cv::circle(handLayerPalm, pp, handRadius, cv::Scalar(0, 102, 255), 2);*/
 	
 	return;
 	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
@@ -1677,7 +1753,7 @@ void Application::captureFrame()
 	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
 	cv::imwrite(buffer_concat, concat);*/
 	char buffer_1[80], buffer_2[80], buffer_3[80], buffer_4[80];
-	sprintf_s(buffer_1, "%d - Hightest Point.jpg", ts);
+	sprintf_s(buffer_1, "%d - concave-centroid.jpg", ts);
 	sprintf_s(buffer_2, "%d - HL1_CON.jpg", ts);
 	sprintf_s(buffer_3, "%d - HL1_COR_G.jpg", ts);
 	sprintf_s(buffer_4, "%d - HL1.jpg", ts);
