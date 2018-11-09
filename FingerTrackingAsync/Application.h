@@ -82,7 +82,9 @@ protected :
 	cv::Mat handLayer2 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer3 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayerPalm = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
+	cv::Mat handLayerCut = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat handLayerAbs = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
+	cv::Mat palmMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 
 	cv::Point handPoint;
 	int handRadius;
@@ -114,6 +116,7 @@ protected :
 	void evaluateHandLayer2();
 	void evaluateHandLayer3();
 	void evaluateHandLayerPalm();
+	void evaluateHandLayerCut();
 	void evaluate3Layer();
 
 	void assignFingerId();
@@ -125,6 +128,7 @@ protected :
 	cv::Vec2d calLinear(cv::Point p1, cv::Point p2);
 	cv::Point calInterceptPoint(cv::Vec2d l1, cv::Vec2d l2);
 	cv::Vec2d calPerpendicularLine(cv::Vec2d l, cv::Point p);
+	cv::Vec2d calParalellLine(cv::Vec2d l, cv::Point p);
 	void calEndpoint(cv::Vec2d l, cv::Point &p1, cv::Point &p2);
 	cv::Point calMedianPoint(cv::Point p1, cv::Point p2);
 	cv::Point calRatioPoint(cv::Point p1, cv::Point p2, double ratio1, double ratio2);
@@ -135,6 +139,7 @@ protected :
 	cv::Point3f convertPoint2dTo3D(cv::Point p);
 	cv::Point calRadiusPoint(double angle, double radius, cv::Point origin);
 	static double calAnglePoint(cv::Point origin, cv::Point p);
+	double calLinerAngleByPoint(cv::Vec2d l, cv::Point p);
 
 	void sendData();
 
@@ -147,24 +152,6 @@ private:
 	struct FingerSorter {
 		cv::Point origin = cv::Point(0, 0);
 		bool operator() (cv::Point p1, cv::Point p2) {
-			/*cv::Point pi = cv::Point(p1.x - origin.x, p1.y - origin.y);
-			cv::Point pj = cv::Point(p2.x - origin.x, p2.y - origin.y);
-			double t1, t2;
-			if (pi.x == 0) {
-				t1 = 0;
-			}
-			else {
-				t1 = atan((double)pi.y / pi.x);
-			}
-			
-			if (pj.x == 0) {
-				t2 = 0;
-			}
-			else {
-				t2 = atan((double)pj.y / pj.x);
-			}
-			return t1 < t2;*/
-
 			double t1 = calAnglePoint(origin, p1);
 			double t2 = calAnglePoint(origin, p2);
 			return t1 < t2;

@@ -64,6 +64,7 @@ void Application::start()
 			//buildRawHandHistogram();
 
 			evaluateHandLayerPalm();
+			evaluateHandLayerCut();
 
 			thread evaluateHandLayer1T = thread(&Application::evaluateHandLayer1, this);
 			thread evaluateHandLater2T = thread(&Application::evaluateHandLayer2, this);
@@ -87,6 +88,7 @@ void Application::start()
 			cv::imshow("Hand Absolute", handLayerAbs);
 			cv::imshow("Edge", edgeColorFrame);
 			cv::imshow("Palm", handLayerPalm);
+			cv::imshow("Cut", handLayerCut);
 			//cv::imshow("histogram", histogramFrame);
 		}
 
@@ -849,7 +851,11 @@ void Application::evaluateHandLayerPalm()
 	bool hasCenter1 = false, hasCenter2 = false;
 	if (maxRange != -1) {
 		cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 50, boundingBox.y + maxStart), cv::Size(10, maxRange)), cv::Scalar(255, 255, 255), -1);
-
+		
+		// start palm mask
+		palmMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
+		cv::rectangle(palmMask, cv::Rect(cv::Point(boundingBox.x, boundingBox.y + maxStart), cv::Size(boundingBox.width+10, maxRange)), cv::Scalar(255), -1);
+		// end palm mask
 		{
 			cv::Mat mask(handLayerPalm.size(), CV_8UC1, cv::Scalar(0));
 			cv::Mat sub;
@@ -1007,6 +1013,96 @@ void Application::evaluateHandLayerPalm()
 	cv::line(handLayerPalm, palmPoint, wristPoint, cv::Scalar(0, 255, 0), 2);
 
 	cv::circle(handLayerPalm, wristPoint, 4, cv::Scalar(0, 255, 0), -1);
+}
+
+void Application::evaluateHandLayerCut()
+{
+	handLayer3.copyTo(handLayerCut);
+
+	cv::bitwise_and(handLayerCut, palmMask, handLayerCut);
+	cv::bitwise_not(handLayerCut, handLayerCut, palmMask);
+	
+	vector<vector<cv::Point>> contours;
+	vector<cv::Vec4i> hierachy;
+	cv::findContours(handLayerCut, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+	vector<vector<cv::Point>> hulls(contours.size());
+	for (int i = 0; i < contours.size(); i++)
+	{
+		cv::convexHull(contours[i], hulls[i]);
+	}
+	vector<cv::Point> hullCentroids(contours.size());
+	for (int i = 0; i < hulls.size(); i++)
+	{
+		hullCentroids[i] = calCentroid(hulls[i]);
+	}
+	int rigthestX = 0;
+	int rigthestIndex = -1;
+	for (int i = 0; i < hullCentroids.size(); i++)
+	{
+		if (hullCentroids[i].x > rigthestX)
+		{
+			rigthestX = hullCentroids[i].x;
+			rigthestIndex = i;
+		}
+	}
+
+	if (rigthestIndex == -1)
+		return;
+
+	vector<cv::Point> rigthestHull = hulls[rigthestIndex];
+
+	cv::Point endpoint_top = cv::Point(640, 480);
+	cv::Point endpoint_buttom = cv::Point(640, 0);
+	for (int i = 0; i < rigthestHull.size(); i++)
+	{
+		cv::Point hp = rigthestHull[i];
+		if (hp.y < endpoint_top.y || (hp.y == endpoint_top.y && hp.x < endpoint_top.x))
+			endpoint_top = hp;
+		if (hp.y > endpoint_buttom.y || (hp.y == endpoint_buttom.y && hp.x < endpoint_buttom.x))
+			endpoint_buttom = hp;
+	}
+
+	cv::Vec2d handDirection = calLinear(endpoint_top, endpoint_buttom);
+	cv::Point ep1, ep2;
+	calEndpoint(handDirection, ep1, ep2);
+
+	double directionAngle = calLinerAngleByPoint(handDirection, palmPoint);
+	cv::Point pr = calRadiusPoint(directionAngle, handRadius, palmPoint);
+	
+	double concave_predict[] = {
+		-0.4,	// index-middle
+		0,		// middle-ring
+		0.5		// ring-little
+	};
+
+	vector<cv::Point> predictConcaves(3, cv::Point(0, 0));
+	vector<cv::Vec2d> parallelLines(3);
+	for (int i = 0; i < 3; i++)
+	{
+		predictConcaves[i] = calRadiusPoint(directionAngle + concave_predict[i], handRadius, palmPoint);
+		parallelLines[i] = calParalellLine(handDirection, predictConcaves[i]);
+	}
+
+
+	handLayer3.copyTo(handLayerCut);
+	cv::cvtColor(handLayerCut, handLayerCut, cv::COLOR_GRAY2BGR);
+	
+	cv::circle(handLayerCut, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
+	cv::circle(handLayerCut, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);
+	cv::circle(handLayerCut, pr, 2, cv::Scalar(0, 0, 255), -1);
+
+	for (int i = 0; i < 3; i++)
+	{
+		cv::Point ppl1, ppl2;
+		calEndpoint(parallelLines[i], ppl1, ppl2);
+		cv::line(handLayerCut, ppl1, ppl2, cv::Scalar(0, 255, 0), 1);
+
+		cv::line(handLayer1, ppl1, ppl2, cv::Scalar(0), 2);
+		cv::circle(handLayerCut, predictConcaves[i], 4, cv::Scalar(0, 102, 255), -1);
+	}
+
+	cv::line(handLayerCut, ep1, ep2, cv::Scalar(0, 0, 255), 2);
+
 }
 
 void Application::evaluate3Layer()
@@ -1394,6 +1490,23 @@ cv::Vec2d Application::calPerpendicularLine(cv::Vec2d l, cv::Point p)
 	}
 }
 
+cv::Vec2d Application::calParalellLine(cv::Vec2d l, cv::Point p)
+{
+	double m = l[0];
+	double mn = m;
+	double cn = 0;
+	if (m == 0) {
+		cn = p.y;
+	}
+	else if (m == HUGE_VAL) {
+		cn = p.x;
+	}
+	else {
+		cn = p.y - m * p.x;
+	}
+	return cv::Vec2d(mn, cn);
+}
+
 void Application::calEndpoint(cv::Vec2d l, cv::Point & p1, cv::Point & p2)
 {
 	double m = l[0];
@@ -1582,6 +1695,21 @@ double Application::calAnglePoint(cv::Point origin, cv::Point p)
 	}
 	
 	return theta;
+}
+
+double Application::calLinerAngleByPoint(cv::Vec2d l, cv::Point p)
+{
+	double m = l[0];
+	if (m == 0)
+		return 0.5*PI;
+	if (m == HUGE_VAL)
+		return PI;
+	if (m < 0) {
+		return atan(abs(1/m)) + PI;
+	}
+	if (m > 0)
+		return atan(abs(m)) + 0.5*PI;
+	return 0.0;
 }
 
 void Application::sendData()
