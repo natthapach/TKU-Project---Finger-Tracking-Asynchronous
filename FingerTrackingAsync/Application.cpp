@@ -1746,12 +1746,13 @@ void Application::captureFrame()
 	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
 	cv::imwrite(buffer_concat, concat);*/
 	char buffer_1[80], buffer_2[80], buffer_3[80], buffer_4[80];
-	sprintf_s(buffer_1, "%d - both-result.jpg", ts);
-	sprintf_s(buffer_2, "%d - HL1_CON.jpg", ts);
+	sprintf_s(buffer_1, "%d - color.jpg", ts);
+	sprintf_s(buffer_2, "%d - drpth.jpg", ts);
 	sprintf_s(buffer_3, "%d - HL1_COR_G.jpg", ts);
 	sprintf_s(buffer_4, "%d - HL1.jpg", ts);
 	
-	cv::imwrite(buffer_1, handLayerPalm);
+	cv::imwrite(buffer_1, colorFrame);
+	cv::imwrite(buffer_2, depthFrame);
 
 }
 
