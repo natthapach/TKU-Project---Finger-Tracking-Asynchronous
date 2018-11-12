@@ -23,6 +23,7 @@ public :
 	int getDepthHandRange();
 	cv::Point getHandPoint();
 	int getHandRadius(int mm);
+	vector<cv::Point> getHandPoints();
 
 	void convertDepthToColor(int x, int y, int z, int *cx, int *cy);
 	void convertDepthToWorld(float x, float y, float z, float *wx, float *wy, float *wz);
@@ -44,6 +45,7 @@ protected :
 	cv::Mat depthFrame;
 	cv::Mat depthHandMask;
 
+	vector<cv::Point> handPositions;
 	float handPosX = 0;
 	float handPosY = 0;
 	int handDepth = 0;

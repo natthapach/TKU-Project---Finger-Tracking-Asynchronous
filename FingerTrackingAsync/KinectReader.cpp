@@ -148,6 +148,11 @@ int KinectReader::getHandRadius(int mm)
 	return radius;
 }
 
+vector<cv::Point> KinectReader::getHandPoints()
+{
+	return handPositions;
+}
+
 void KinectReader::convertDepthToColor(int x, int y, int z, int * cx, int * cy)
 {
 	openni::CoordinateConverter::convertDepthToColor(depthStream, colorStream, x, y, z, cx, cy);
@@ -296,6 +301,7 @@ void KinectReader::modifyImage(openni::VideoFrameRef depthFrame, int numberOfPoi
 
 void KinectReader::settingHandValue()
 {
+	handPositions.clear();
 	const nite::Array<nite::HandData>& hands = handsFrame.getHands();
 
 	for (int i = 0; i < hands.getSize(); i++) {
@@ -312,18 +318,11 @@ void KinectReader::settingHandValue()
 			);
 			handPosX = x;
 			handPosY = y;
+			
+			handPositions.push_back(cv::Point(x, y));
 			openni::VideoFrameRef depthFrame = handsFrame.getDepthFrame();
 			openni::DepthPixel* depthPixel = (openni::DepthPixel*) ((char*)depthFrame.getData() + ((int)y * depthFrame.getStrideInBytes())) + (int)x;
 			handDepth = *depthPixel;
-
-			float calX;
-			float calY;
-			double calZ;
-			handTracker.convertDepthCoordinatesToHand(x, y, (int)*depthPixel, &calX, &calY);
-			//calculate3DCoordinate(x, y, *depthPixel, &calX, &calY, &calZ);
-			//cout << "hand #" << hand.getId() << " NITE : (" << hand.getPosition().x << ", " << hand.getPosition().y << ", " << hand.getPosition().z << ")" << endl;
-			//cout << "hand #" << hand.getId() << " CAL  : (" << calX << ", " << calY << ", " << calZ << ")" << endl;
-			int a = 1;
 		}
 
 		if (hand.isLost())

@@ -100,7 +100,11 @@ void Application::start()
 			cout << "FPS " << fpsT << endl;
 		}
 
-		//cv::normalize(rawDepthFrame, rawDepthFrame, 0, 255, cv::NORM_MINMAX, CV_8UC1);
+		vector<cv::Point> handPoints = kinectReader.getHandPoints();
+		for (int i = 0; i < handPoints.size(); i++)
+		{
+			cv::circle(depthFrame, handPoints[i], 4, cv::Scalar(0, 0, 255), -1);
+		}
 		cv::imshow(WINDOW_RGB, colorFrame);
 		cv::imshow(WINDOW_DEPTH, depthFrame);
 
