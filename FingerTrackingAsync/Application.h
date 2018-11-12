@@ -141,6 +141,8 @@ protected :
 	static double calAnglePoint(cv::Point origin, cv::Point p);
 	double calLinerAngleByPoint(cv::Vec2d l, cv::Point p);
 
+	vector<cv::Point> findLargestContour(cv::Mat in);
+
 	void sendData();
 
 	void captureFrame();

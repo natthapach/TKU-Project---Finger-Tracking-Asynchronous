@@ -25,9 +25,9 @@ int Application::initialize()
 void Application::start()
 {
 	while (true) {
-		kinectReader.readRGBFrame();
+		//kinectReader.readRGBFrame();
 		kinectReader.readDepthFrame();
-		colorFrame = kinectReader.getRGBFrame();
+		//colorFrame = kinectReader.getRGBFrame();
 		depthFrame = kinectReader.getDepthFrame();
 		rawDepthFrame = kinectReader.getRawDepthFrame();
 		
@@ -41,7 +41,7 @@ void Application::start()
 			//thread transformColorFrameT = thread(&Application::transformColorFrame, this);
 			//transformColorFrameT.join(); // 13ms
 			//thread buildSkinMaskT = thread(&Application::buildSkinMask, this);
-			thread buildEdgeColorT = thread(&Application::buildEdgeColor, this);
+			//thread buildEdgeColorT = thread(&Application::buildEdgeColor, this);
 			
 			//buildSkinMaskT.join(); // 18ms
 			buildDepthHandMaskT.join();	// ~8 from start 
@@ -54,10 +54,9 @@ void Application::start()
 			thread buildHand3LayersT = thread(&Application::buildHand3Layers, this);
 			buildHand3LayersT.join(); //10
 
-			buildEdgeColorT.join();
-			buildEdgeMask();
+			//buildEdgeColorT.join();
+			//buildEdgeMask();
 
-			cv::imshow("edge maskx", edgeMask);
 			cv::imshow("hand layer1 depth", handLayer1Depth);
 
 			//buildHistogram();
@@ -86,7 +85,7 @@ void Application::start()
 			cv::imshow(WINDOW_MASK_L2, handLayer2);
 			cv::imshow(WINDOW_MASK_L3, handLayer3);
 			cv::imshow("Hand Absolute", handLayerAbs);
-			cv::imshow("Edge", edgeColorFrame);
+			//cv::imshow("Edge", edgeColorFrame);
 			cv::imshow("Palm", handLayerPalm);
 			cv::imshow("Cut", handLayerCut);
 			//cv::imshow("histogram", histogramFrame);
@@ -103,7 +102,7 @@ void Application::start()
 		}
 
 		//cv::normalize(rawDepthFrame, rawDepthFrame, 0, 255, cv::NORM_MINMAX, CV_8UC1);
-		cv::imshow(WINDOW_RGB, colorFrame);
+		//cv::imshow(WINDOW_RGB, colorFrame);
 		cv::imshow(WINDOW_DEPTH, depthFrame);
 
 		int key = cv::waitKey(1);
@@ -1019,6 +1018,23 @@ void Application::evaluateHandLayerCut()
 {
 	handLayer3.copyTo(handLayerCut);
 
+	vector<cv::Point> contourO = findLargestContour(handLayerCut);
+	if (contourO.size() == 0)
+		return;
+	vector<int> hullO;
+	cv::convexHull(contourO, hullO);
+	vector<cv::Vec4i> convex;
+	cv::convexityDefects(contourO, hullO, convex);
+	vector<cv::Point> concave;
+	for (int i = 0; i < convex.size(); i++)
+	{
+		cv::Vec4i v = convex[i];
+		if (v[3] > CONVEX_DEPTH_THRESHOLD_LAYER_2)
+		{
+			concave.push_back(contourO[v[2]]);
+		}
+	}
+
 	cv::bitwise_and(handLayerCut, palmMask, handLayerCut);
 	cv::bitwise_not(handLayerCut, handLayerCut, palmMask);
 	
@@ -1091,18 +1107,23 @@ void Application::evaluateHandLayerCut()
 	cv::circle(handLayerCut, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);
 	cv::circle(handLayerCut, pr, 2, cv::Scalar(0, 0, 255), -1);
 
-	for (int i = 0; i < 3; i++)
-	{
-		cv::Point ppl1, ppl2;
-		calEndpoint(parallelLines[i], ppl1, ppl2);
-		cv::line(handLayerCut, ppl1, ppl2, cv::Scalar(0, 255, 0), 1);
+	if (concave.size() <= 2)
+		for (int i = 0; i < 3; i++)
+		{
+			cv::Point ppl1, ppl2;
+			calEndpoint(parallelLines[i], ppl1, ppl2);
+			cv::line(handLayerCut, ppl1, ppl2, cv::Scalar(0, 255, 0), 1);
 
-		cv::line(handLayer1, ppl1, ppl2, cv::Scalar(0), 2);
-		cv::circle(handLayerCut, predictConcaves[i], 4, cv::Scalar(0, 102, 255), -1);
-	}
+			cv::line(handLayer1, ppl1, ppl2, cv::Scalar(0), 2);
+			cv::circle(handLayerCut, predictConcaves[i], 4, cv::Scalar(0, 102, 255), -1);
+		}
 
 	cv::line(handLayerCut, ep1, ep2, cv::Scalar(0, 0, 255), 2);
-
+	
+	for (int i = 0; i < concave.size(); i++)
+	{
+		cv::circle(handLayerCut, concave[i], 4, cv::Scalar(0, 0, 255), 2);
+	}
 }
 
 void Application::evaluate3Layer()
@@ -1422,7 +1443,7 @@ cv::Vec2d Application::calLinear(cv::Point p1, cv::Point p2)
 	double m, c;
 	if (dx == 0) {
 		m = HUGE_VAL;
-		c = p1.x;
+		c = -p1.x;
 	}
 	else {
 		m = dy / dx;
@@ -1499,7 +1520,7 @@ cv::Vec2d Application::calParalellLine(cv::Vec2d l, cv::Point p)
 		cn = p.y;
 	}
 	else if (m == HUGE_VAL) {
-		cn = p.x;
+		cn = -p.x;
 	}
 	else {
 		cn = p.y - m * p.x;
@@ -1710,6 +1731,29 @@ double Application::calLinerAngleByPoint(cv::Vec2d l, cv::Point p)
 	if (m > 0)
 		return atan(abs(m)) + 0.5*PI;
 	return 0.0;
+}
+
+vector<cv::Point> Application::findLargestContour(cv::Mat in)
+{
+	vector<vector<cv::Point>> contours;
+	vector<cv::Vec4i> hierachy;
+	cv::findContours(in, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+
+	double larea = 0;
+	int lindex = -1;
+	vector<cv::Point> largestContour;
+	for (int i = 0; i < contours.size(); i++)
+	{
+		double a = cv::contourArea(contours[i]);
+		if (a > larea) {
+			larea = a;
+			lindex = i;
+		}
+	}
+
+	if (lindex != -1)
+		largestContour = contours[lindex];
+	return largestContour;
 }
 
 void Application::sendData()
