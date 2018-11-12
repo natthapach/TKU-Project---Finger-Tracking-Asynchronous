@@ -80,7 +80,8 @@ void Application::start()
 			thread(&Application::sendData, this).detach();
 			/*evaluateHandLayer1();
 			evaluateHandLater2();*/
-				
+			cv::imshow("C_S", C_S);
+			cv::imshow("C_B", C_B);
 			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
 			cv::imshow(WINDOW_MASK_L2, handLayer2);
 			cv::imshow(WINDOW_MASK_L3, handLayer3);
@@ -417,17 +418,29 @@ void Application::evaluateHandLayer1() // ~66ms
 	cv::Mat openningKernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
 	cv::morphologyEx(handLayer1, handLayer1, cv::MORPH_OPEN, openningKernel, cv::Point(-1, -1), 2);*/
 	handLayer1Corners.clear();
-	cv::Mat corner;
+	handLayer1.copyTo(C_S);
+	handLayer1.copyTo(C_B);
+	cv::cvtColor(C_S, C_S, cv::COLOR_GRAY2BGR);
+	cv::cvtColor(C_B, C_B, cv::COLOR_GRAY2BGR);
+	cv::Mat corner, corner_s;
 	cv::cornerHarris(handLayer1, corner, 8, 5, 0.04, cv::BORDER_DEFAULT);
+	cv::cornerHarris(handLayer1, corner_s, 2, 5, 0.04, cv::BORDER_DEFAULT);
 	cv::normalize(corner, corner, 0, 255, cv::NORM_MINMAX, CV_32FC1, cv::Mat());
+	cv::normalize(corner_s, corner_s, 0, 255, cv::NORM_MINMAX, CV_32FC1, cv::Mat());
 
 	for (int j = 0; j < corner.rows; j++) {
 		float* cornerRow = corner.ptr<float>(j);
+		float* cornerRow_S = corner_s.ptr<float>(j);
 		for (int i = 0; i < corner.cols; i++) {
 			if (cornerRow[i] > CORNER_THRESHOLD) {
 				if (handLayer1.ptr<uchar>(j)[i] > 0) {
 					handLayer1Corners.push_back(cv::Point(i, j));
 				}
+				cv::circle(C_B, cv::Point(i, j), 1, cv::Scalar(0, 0, 255), -1);
+			}
+
+			if (cornerRow_S[i] > CORNER_THRESHOLD) {
+				cv::circle(C_S, cv::Point(i, j), 2, cv::Scalar(0, 0, 255), -1);
 			}
 		}
 	}
@@ -1750,13 +1763,13 @@ void Application::captureFrame()
 	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
 	cv::imwrite(buffer_concat, concat);*/
 	char buffer_1[80], buffer_2[80], buffer_3[80], buffer_4[80];
-	sprintf_s(buffer_1, "%d - color.jpg", ts);
-	sprintf_s(buffer_2, "%d - drpth.jpg", ts);
+	sprintf_s(buffer_1, "%d - C_S.jpg", ts);
+	sprintf_s(buffer_2, "%d - C_B.jpg", ts);
 	sprintf_s(buffer_3, "%d - HL1_COR_G.jpg", ts);
 	sprintf_s(buffer_4, "%d - HL1.jpg", ts);
 	
-	cv::imwrite(buffer_1, colorFrame);
-	cv::imwrite(buffer_2, depthFrame);
+	cv::imwrite(buffer_1, C_S);
+	cv::imwrite(buffer_2, C_B);
 
 }
 
