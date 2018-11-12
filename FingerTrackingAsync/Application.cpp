@@ -436,7 +436,7 @@ void Application::evaluateHandLayer1() // ~66ms
 				if (handLayer1.ptr<uchar>(j)[i] > 0) {
 					handLayer1Corners.push_back(cv::Point(i, j));
 				}
-				cv::circle(C_B, cv::Point(i, j), 1, cv::Scalar(0, 0, 255), -1);
+				
 			}
 
 			if (cornerRow_S[i] > CORNER_THRESHOLD) {
@@ -473,7 +473,8 @@ void Application::evaluateHandLayer1() // ~66ms
 			}
 		}
 	}
-
+	
+	
 	
 	cv::cvtColor(handLayer1, handLayer1, cv::COLOR_GRAY2BGR);
 	vector<int> ignoreContours;
@@ -481,8 +482,8 @@ void Application::evaluateHandLayer1() // ~66ms
 		double area = cv::contourArea(contoursL1[it->first]);
 		if (area < AREA_CONTOUR_THRESHOLD) {
 			ignoreContours.push_back(it->first);
-			continue;
-		}
+			cv::drawContours(C_B, contoursL1, it->first, cv::Scalar(0, 0, 255), -1);
+		} 
 	}
 	for (int i = 0; i < ignoreContours.size(); i++) {
 		cornerGroup.erase(ignoreContours[i]);

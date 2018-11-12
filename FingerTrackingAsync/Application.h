@@ -42,7 +42,7 @@ protected :
 	/* Threshold for cluster corners on hand layer 1 */
 	const int DISTANCE_THRESHOLD_CORNER_LAYER_1 = 3;
 	/* Threshold for ignore contours on hand layer 1 */
-	const double AREA_CONTOUR_THRESHOLD = 15;
+	const double AREA_CONTOUR_THRESHOLD = 200;
 	/* Threshold for select corner pixel on hand layer 1 */
 	const int CORNER_THRESHOLD = 130;
 
