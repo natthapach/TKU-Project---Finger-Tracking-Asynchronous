@@ -69,6 +69,7 @@ protected :
 	map<int, cv::Point3f> finger3dMap; // deprecate
 	vector<cv::Point3f> finger3ds = vector<cv::Point3f>(6, cv::Point3f(0, 0, 0));
 
+	cv::Mat H_O, H_DE, H_C;
 	cv::Mat skinMask;
 	cv::Mat colorFrame;
 	cv::Mat depthFrame;

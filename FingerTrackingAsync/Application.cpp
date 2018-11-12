@@ -80,7 +80,9 @@ void Application::start()
 			thread(&Application::sendData, this).detach();
 			/*evaluateHandLayer1();
 			evaluateHandLater2();*/
-				
+			cv::imshow("H_O", H_O);
+			cv::imshow("H_DE", H_DE);
+			cv::imshow("H_C", H_C);
 			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
 			cv::imshow(WINDOW_MASK_L2, handLayer2);
 			cv::imshow(WINDOW_MASK_L3, handLayer3);
@@ -711,6 +713,11 @@ void Application::evaluateHandLayerPalm()
 {
 	handLayer3.copyTo(handLayerPalm);
 
+	handLayer3.copyTo(H_O);
+	handLayer3.copyTo(H_DE);
+	handLayer3.copyTo(H_C);
+	cv::morphologyEx(H_DE, H_DE, cv::MORPH_CLOSE, cv::Mat(), cv::Point(-1, -1), 3);
+
 	vector<vector<cv::Point>> contoursx;
 	vector<cv::Vec4i> hierachyx;
 	cv::findContours(handLayerPalm, contoursx, hierachyx, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
@@ -730,6 +737,12 @@ void Application::evaluateHandLayerPalm()
 	if (max_index == -1) return;
 
 	vector<cv::Point> maxContour = contoursx[max_index];
+	cv::drawContours(H_C, contoursx, max_index, cv::Scalar(255), -1);
+	cv::cvtColor(H_C, H_C, cv::COLOR_GRAY2BGR);
+	cv::cvtColor(H_DE, H_DE, cv::COLOR_GRAY2BGR);
+	cv::drawContours(H_C, contoursx, max_index, cv::Scalar(0, 0,255), 1);
+	cv::drawContours(H_DE, contoursx, max_index, cv::Scalar(0, 0,255), 1);
+
 	cv::Rect box = cv::boundingRect(maxContour);
 	vector<int> hull;
 	cv::convexHull(maxContour, hull);
@@ -1750,13 +1763,14 @@ void Application::captureFrame()
 	sprintf_s(buffer_concat, "%d - concated.jpg", ts);
 	cv::imwrite(buffer_concat, concat);*/
 	char buffer_1[80], buffer_2[80], buffer_3[80], buffer_4[80];
-	sprintf_s(buffer_1, "%d - color.jpg", ts);
-	sprintf_s(buffer_2, "%d - drpth.jpg", ts);
-	sprintf_s(buffer_3, "%d - HL1_COR_G.jpg", ts);
+	sprintf_s(buffer_1, "%d - H_O.jpg", ts);
+	sprintf_s(buffer_2, "%d - H_DE.jpg", ts);
+	sprintf_s(buffer_3, "%d - H_C.jpg", ts);
 	sprintf_s(buffer_4, "%d - HL1.jpg", ts);
 	
-	cv::imwrite(buffer_1, colorFrame);
-	cv::imwrite(buffer_2, depthFrame);
+	cv::imwrite(buffer_1, H_O);
+	cv::imwrite(buffer_2, H_DE);
+	cv::imwrite(buffer_3, H_C);
 
 }
 
