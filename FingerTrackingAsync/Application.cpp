@@ -1285,9 +1285,11 @@ void Application::evaluate3Layer()
 	}
 	
 	int handRadiusLess = 0.5 * handRadius;
+	int handRadiusMore = 1.5 * handRadius;
 	cv::circle(handLayer2, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
 	cv::circle(handLayer2, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);
 	cv::circle(handLayer2, palmPoint, handRadiusLess, cv::Scalar(0, 102, 255), 2);
+	cv::circle(handLayer2, palmPoint, handRadiusMore, cv::Scalar(0, 102, 255), 2);
 
 	cv::circle(handLayerAbs, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
 	cv::circle(handLayerAbs, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);

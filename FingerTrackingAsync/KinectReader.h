@@ -46,6 +46,7 @@ protected :
 
 	float handPosX = 0;
 	float handPosY = 0;
+	nite::HandId handId = -1;
 	int handDepth = 0;
 	int numberOfHands = 0;
 private :

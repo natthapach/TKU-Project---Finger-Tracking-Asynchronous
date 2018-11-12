@@ -301,6 +301,20 @@ void KinectReader::settingHandValue()
 	for (int i = 0; i < hands.getSize(); i++) {
 		nite::HandData hand = hands[i];
 
+		if (hand.isLost())
+			numberOfHands--;
+		if (hand.isNew())
+			numberOfHands++;
+
+		if (handId == -1)
+			handId = hand.getId();
+
+		if (handId != -1 && hand.getId() != handId)
+			continue;
+
+		if (hand.isLost())
+			handId = -1;
+
 		if (hand.isTracking()) {
 			nite::Point3f position = hand.getPosition();
 			float x, y;
@@ -326,9 +340,6 @@ void KinectReader::settingHandValue()
 			int a = 1;
 		}
 
-		if (hand.isLost())
-			numberOfHands--;
-		if (hand.isNew())
-			numberOfHands++;
+		
 	}
 }
