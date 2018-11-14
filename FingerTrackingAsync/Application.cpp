@@ -1087,7 +1087,7 @@ void Application::evaluateHandLayerCut()
 	
 	double concave_predict[] = {
 		-0.4,	// index-middle
-		0,		// middle-ring
+		0.1,		// middle-ring
 		0.5		// ring-little
 	};
 
@@ -1131,16 +1131,16 @@ void Application::evaluate3Layer()
 
 	fingerPointL12.clear();
 
-	for (int i = 0; i < fingerL2Point.size(); i++)
+	/*for (int i = 0; i < fingerL2Point.size(); i++)
 	{
 		fingerPointL12.push_back(fingerL2Point[i]);
-	}
+	}*/
 
 	vector<vector<cv::Point>> nonMergeCorners;
+	vector<bool> fingerL2Used(fingerL2Point.size(), false);
 
 	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++)
 	{
-		bool ignore = false;
 		vector<cv::Point> corners = it->second;
 		vector<cv::Point> contour = contoursL1[it->first];
 		for (int i = 0; i < fingerL2Point.size(); i++)
@@ -1148,12 +1148,20 @@ void Application::evaluate3Layer()
 			cv::Point finger = fingerL2Point[i];
 			double d = cv::pointPolygonTest(contour, finger, true);
 			if (d > MIN_DIST_12) {
-				ignore = true;
+				corners.push_back(finger);
+				cv::circle(handLayer2, finger, 4, cv::Scalar(0, 0, 255), 2);
+				cv::drawContours(handLayer2, vector<vector<cv::Point>>{ contour }, 0, cv::Scalar(0, 0, 255), 2);
+				fingerL2Used[i] = true;
 				break;
 			}
 		}
-		if (!ignore) {
-			nonMergeCorners.push_back(corners);
+		nonMergeCorners.push_back(corners);
+	}
+
+	for (int i = 0; i < fingerL2Used.size(); i++)
+	{
+		if (!fingerL2Used[i]) {
+			fingerPointL12.push_back(fingerL2Point[i]);
 		}
 	}
 
@@ -1180,7 +1188,7 @@ void Application::evaluate3Layer()
 				nearthestIndex = i;
 			}
 
-			if (d > 1.5*handRadius)
+			if (d > 1.4*handRadius)
 				extendPalm = true;
 		}
 
@@ -1212,14 +1220,48 @@ void Application::evaluate3Layer()
 void Application::assignFingerId()
 {
 	vector<cv::Point2d> fingerPointL12Polar(fingerPointL12.size());
-	vector<cv::Point3f> fingerPoint3d(fingerPointL12.size());
+	vector<cv::Point3f> fingerPoint3d;
+	vector<cv::Point> fingerPoint3d2;
 	FingerSorter fingerSorter;
 	fingerSorter.origin = palmPoint;
 	sort(fingerPointL12.begin(), fingerPointL12.end(), fingerSorter);
-	for (int i = 0; i < fingerPointL12.size(); i++)
+	/*for (int i = 0; i < fingerPointL12.size(); i++)
 	{
 		fingerPointL12Polar[i] = convertPointCartesianToPolar(fingerPointL12[i]);
 		fingerPoint3d[i] = convertPoint2dTo3D(fingerPointL12[i]);
+	}*/
+	int i = 0;
+	while (i < fingerPointL12.size()) {
+		cv::Point pi = fingerPointL12[i];
+		cv::Point pj = fingerPointL12[(i + 1) % fingerPointL12.size()];
+		double ai = calAnglePoint(palmPoint, pi);
+		double aj = calAnglePoint(palmPoint, pj);
+		double dij = calDistance(pi, pj);
+
+		cv::Point3f p3d;
+		cv::Point p3d2;
+		if (abs(ai - aj) < ASSIGN_FINGER_ANGLE_THRESHOLD) {
+			double di = calDistance(palmPoint, pi);
+			double dj = calDistance(palmPoint, pj);
+
+			if (di > dj) {
+				p3d = convertPoint2dTo3D(pi);
+				p3d2 = pi;
+			}
+			else {
+				p3d = convertPoint2dTo3D(pj);
+				p3d2 = pj;
+			}
+			i += 2;
+		}
+		else {
+			p3d = convertPoint2dTo3D(pi);
+			p3d2 = pi;
+			i += 1;
+		}
+
+		fingerPoint3d.push_back(p3d);
+		fingerPoint3d2.push_back(p3d2);
 	}
 
 	string fingerNames[] = {
@@ -1232,10 +1274,6 @@ void Application::assignFingerId()
 	for (int i = 0; i < fingerPoint3d.size(); i++)
 	{
 		cv::Point3f p = fingerPoint3d[i];
-		/*char buffer[100];
-		sprintf_s(buffer, "(%.2f, %.2f, %.2f)", p.x, p.y, p.z);
-		printf("(%.2f, %.2f, %.2f)\n", p.x, p.y, p.z);
-		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);*/
 	}
 	
 	if (palmPoint.x == 0 || palmPoint.y == 0)
@@ -1245,13 +1283,13 @@ void Application::assignFingerId()
 	char buffer[100];
 	sprintf_s(buffer, "(%.2f, %.2f, %.2f)", palmPoint3d.x, palmPoint3d.y, palmPoint3d.z);
 	cv::putText(handLayerAbs, buffer, cv::Point(palmPoint.x, palmPoint.y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
-	for (int i = 0; i < fingerPointL12.size() && i < 5; i++)
+	for (int i = 0; i < fingerPoint3d.size() && i < 5; i++)
 	{
 		finger3dMap[fingerIds[i]] = fingerPoint3d[i];
 		finger3ds[fingerIds[i]] = fingerPoint3d[i];
 		char buffer[10];
 		sprintf_s(buffer, "%s", fingerNames[i].c_str());
-		cv::putText(handLayerAbs, buffer, cv::Point(fingerPointL12[i].x, fingerPointL12[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
+		cv::putText(handLayerAbs, buffer, cv::Point(fingerPoint3d2[i].x, fingerPoint3d2[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
 	}
 	finger3dMap[PALM_POSITION] = palmPoint3d;
 	finger3ds[PALM_POSITION] = palmPoint3d;

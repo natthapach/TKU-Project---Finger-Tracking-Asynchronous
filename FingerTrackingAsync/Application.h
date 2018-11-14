@@ -51,13 +51,15 @@ protected :
 
 	const int HAND_RADIUS_MM = 50;
 
+	const double ASSIGN_FINGER_ANGLE_THRESHOLD = (5 * PI / 180);
+
 	const string WINDOW_RGB = "RGB";
 	const string WINDOW_DEPTH = "Depth";
 	const string WINDOW_MASK_L1 = "Mask Layer 1";
 	const string WINDOW_MASK_L2 = "Mask Layer 2";
 	const string WINDOW_MASK_L3 = "Mask Layer 3";
 	const string WINDOW_HISTOGRAM = "Histogram";
-
+	
 	
 
 	int64 tickCount = 0;
