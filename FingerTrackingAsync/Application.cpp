@@ -36,31 +36,8 @@ void Application::start()
 			handPoint = kinectReader.getHandPoint();
 			handRadius = kinectReader.getHandRadius(HAND_RADIUS_MM);
 			
-			thread buildDepthHandMaskT = thread(&Application::buildDepthHandMask, this);
-
-			//thread transformColorFrameT = thread(&Application::transformColorFrame, this);
-			//transformColorFrameT.join(); // 13ms
-			//thread buildSkinMaskT = thread(&Application::buildSkinMask, this);
-			//thread buildEdgeColorT = thread(&Application::buildEdgeColor, this);
-			
-			//buildSkinMaskT.join(); // 18ms
-			buildDepthHandMaskT.join();	// ~8 from start 
-			//transformDepthFrame();
-			//buildHistogram();
-
-			//thread combineSkinDepthT = thread(&Application::combineSkinHandMask, this);
-			//combineSkinDepthT.join(); // 7ms
-
-			thread buildHand3LayersT = thread(&Application::buildHand3Layers, this);
-			buildHand3LayersT.join(); //10
-
-			//buildEdgeColorT.join();
-			//buildEdgeMask();
-
-			cv::imshow("hand layer1 depth", handLayer1Depth);
-
-			//buildHistogram();
-			//buildRawHandHistogram();
+			buildDepthHandMask();
+			buildHand3Layers();
 
 			evaluateHandLayerPalm();
 			evaluateHandLayerCut();
@@ -76,11 +53,8 @@ void Application::start()
 
 			assignFingerId();
 
-			//adapterCaller.sendData(finger3ds);
 			thread(&Application::sendData, this).detach();
-			/*evaluateHandLayer1();
-			evaluateHandLater2();*/
-				
+
 			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
 			cv::imshow(WINDOW_MASK_L2, handLayer2);
 			cv::imshow(WINDOW_MASK_L3, handLayer3);
@@ -559,149 +533,273 @@ void Application::evaluateHandLayer2()	// 7ms
 
 void Application::evaluateHandLayer3()
 {
-	vector<cv::Vec4i> hieracry;
-	vector<vector<cv::Point>> contours;
-	cv::findContours(handLayer3, contours, hieracry, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
-	
-	if (contours.size() == 0)
-		return;
-	
-	double largestArea = 0;
-	int largestIndex = 0;
-	for (int i = 0; i < contours.size(); i++) {
-		double a = cv::contourArea(contours[i]);
-		if (a > largestArea) {
-			largestArea = a;
-			largestIndex = i;
-		}
-	}
+	// find largest contour and fill on
+	vector<cv::Point> largestContour = findLargestContour(handLayer3);
+	cv::drawContours(handLayerPalm, vector<vector<cv::Point>> {largestContour}, 0, cv::Scalar(255), -1);
 
-	vector<cv::Point> largestContour = contours[largestIndex];
-	
+	// find bounding box to define resion
+	cv::Rect boundingBox = cv::boundingRect(largestContour);
+
+	// find concave points
 	vector<int> largestHull;
 	cv::convexHull(largestContour, largestHull);
-	vector<cv::Vec4i> convexDefect;
-	cv::convexityDefects(largestContour, largestHull, convexDefect);
+	vector<cv::Point> concavePoints = findConcavePoints(largestContour, largestHull, 3000);
+
+	cv::Point minConcave;
+	if (concavePoints.size() > 0) {
+		minConcave = EL3_findMinConcave(concavePoints);
+	}
 
 
-	// find heightest contour point
-	int heightestY = 480;
-	int heightestIndex = -1;
-	for (int i = 0; i < largestContour.size(); i++) {
-		if (largestContour[i].y <= heightestY) {
-			heightestY = largestContour[i].y;
-			heightestIndex = i;
+	vector<cv::Vec2i> regions;
+	vector<bool> changingTable(boundingBox.height + 4, false);
+	vector<bool> acceptVariationTable(boundingBox.height, false);
+	vector<bool> acceptLengthTable(boundingBox.height, false);
+	for (int y = boundingBox.y; y < boundingBox.y + boundingBox.height; y++) {
+		uchar* handPalmRow = handLayerPalm.ptr<uchar>(y);
+		int changing = 0;
+		int prev = 0;
+		int countWhite = 0;
+		for (int x = boundingBox.x - 5; x < boundingBox.x + boundingBox.width + 5; x++) {
+			int cur = handPalmRow[x];
+			int rawCur = cur;
+			int next = handPalmRow[x + 2];
+
+			if (cur == 128) cur = 0;
+			if (next == 128) next = 0;
+			if (rawCur == 128) rawCur = 255;
+
+			if (cur != prev && prev != next) {
+				changing += 1;
+				prev = cur;
+			}
+
+			if (rawCur == 255) {
+				countWhite += 1;
+			}
+		}
+
+		if (changing <= 2) {
+			if (countWhite >= 1.5*handRadius) {
+				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 10, y), cv::Size(10, 1)), cv::Scalar(255), -1);
+				acceptLengthTable[y - boundingBox.y] = true;
+			}
+			else {
+				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 10, y), cv::Size(10, 1)), cv::Scalar(128), -1);
+			}
+			changingTable[y - boundingBox.y] = true;
+			acceptVariationTable[y - boundingBox.y] = true;
 		}
 	}
-	if (heightestIndex == -1)
-		return;
-	cv::Point heightestPoint = largestContour[heightestIndex];
-	cv::Rect boundingBox = cv::boundingRect(largestContour);
-	cv::RotatedRect minAreaBox = cv::minAreaRect(largestContour);
-	cv::Point2f vertices2f[4];
-	minAreaBox.points(vertices2f);
 
-	cv::Point boundingBoxTopMedian = calMedianPoint(cv::Point(boundingBox.x, boundingBox.y), cv::Point(boundingBox.x + boundingBox.width, boundingBox.y));
-
-	cv::Vec2d boundingToHandLine = calLinear(boundingBoxTopMedian, handPoint);	// L
-	cv::Point bhl_p1, bhl_p2;
-	calEndpoint(boundingToHandLine, bhl_p1, bhl_p2);
-
-	cv::Vec2d heightestToHandLine = calLinear(heightestPoint, handPoint);
-	cv::Point hhl_p1, hhl_p2;
-	calEndpoint(heightestToHandLine, hhl_p1, hhl_p2);
-
-	double distTopHand = calDistance(handPoint, boundingBoxTopMedian);
-	double distHeightestHand = calDistance(handPoint, heightestPoint);
-	double distHandPalm = 2 * distTopHand - 80;
-	double distHeightestPalm = 2 * distHeightestHand - 80;
-
-	cv::Point p1_1, p1_2;
-	calLinearInterceptCirclePoint(handPoint, distHandPalm, boundingToHandLine, p1_1, p1_2);
-	cv::Point p4_1, p4_2;
-	calLinearInterceptCirclePoint(handPoint, distHeightestPalm, heightestToHandLine, p4_1, p4_2);
-	
-	vector<cv::Point> convex;
-	for (int i = 0; i < convexDefect.size(); i++) {
-		cv::Vec4i v = convexDefect[i];
-		int depth = v[3];
-		if (depth < CONVEX_DEPTH_THRESHOLD_LAYER_3)
-			continue;
-
-		cv::Point farPoint = largestContour[v[2]];
-		convex.push_back(farPoint);
-		/*cv::circle(handLayer3, farPoint, 4, cv::Scalar(0, 102, 255), 2);*/
-	}
-
-	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
-
-	
-	if (convex.size() <= 2) {
-		// use height point
-		double d1 = calDistance(heightestPoint, p4_1);
-		double d2 = calDistance(heightestPoint, p4_2);
-
-		/*if (d1 < d2) {
-			palmPoint.x = p4_2.x;
-			palmPoint.y = p4_2.y;
+	int start_accept_length = -1;
+	int maxRange = -1;
+	int maxStart = -1;
+	int maxEnd = -1;
+	for (int i = 0; i < acceptLengthTable.size(); i++)
+	{
+		if (acceptLengthTable[i]) {
+			if (start_accept_length == -1) {
+				start_accept_length = i;
+			}
 		}
 		else {
-			palmPoint.x = p4_1.x;
-			palmPoint.y = p4_1.y;
-		}*/
+			if (start_accept_length != -1) {
+				bool isMergeSection = false;
+				for (int j = 1; j <= 10 && i + j < acceptLengthTable.size(); j++) {
+					if (acceptLengthTable[i + j]) {
+						isMergeSection = true;
+						break;
+					}
+				}
+				if (isMergeSection) {
+					continue;
+				}
+				int range = i - start_accept_length;
+				if (range > maxRange) {
+					maxRange = range;
+					maxStart = start_accept_length;
+					maxEnd = i;
+				}
+				start_accept_length = -1;
+			}
+		}
+	}
+	if (start_accept_length != -1) {
+		int range = acceptLengthTable.size() - start_accept_length;
+		if (range > maxRange) {
+			maxRange = range;
+			maxStart = start_accept_length;
+			maxEnd = acceptLengthTable.size();
+		}
+	}
+
+	cv::Point center1, center2;
+	bool hasCenter1 = false, hasCenter2 = false;
+	if (maxRange != -1) {
+		cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 50, boundingBox.y + maxStart), cv::Size(10, maxRange)), cv::Scalar(255, 255, 255), -1);
+
+		// start palm mask
+		palmMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
+		cv::rectangle(palmMask, cv::Rect(cv::Point(boundingBox.x, boundingBox.y + maxStart), cv::Size(boundingBox.width + 10, maxRange)), cv::Scalar(255), -1);
+		// end palm mask
+		{
+			cv::Mat mask(handLayerPalm.size(), CV_8UC1, cv::Scalar(0));
+			cv::Mat sub;
+			int x = boundingBox.x;
+			int y = boundingBox.y + maxStart;
+			int w = boundingBox.width;
+			int h = maxRange;
+			cv::Point center(x + w / 2, y + h / 2);
+			cv::rectangle(mask, cv::Rect(cv::Point(x, y), cv::Size(w, h)), cv::Scalar(255), -1);
+			cv::bitwise_and(handLayerPalm, mask, sub);
+			cv::Moments m = cv::moments(sub, true);
+			center1 = cv::Point(m.m10 / m.m00, m.m01 / m.m00);
+			hasCenter1 = true;
+			/*cv::rectangle(handLayerPalm, cv::Rect(cv::Point(x, y), cv::Size(w, h)), cv::Scalar(0, 0, 255), 1);
+			cv::circle(handLayerPalm, center, 4, cv::Scalar(0, 0, 255), -1);
+			cv::circle(handLayerPalm, center, handRadius, cv::Scalar(0, 0, 255), 1);*/
+		}
+
+		if (concavePoints.size() > 0) {
+			cv::Mat mask(handLayerPalm.size(), CV_8UC1, cv::Scalar(0));
+			cv::Mat sub;
+			int x = minConcave.x;
+			int y = boundingBox.y + maxStart;
+			int w = boundingBox.x + boundingBox.width - minConcave.x;
+			int h = maxRange;
+			cv::Point center(x + w / 2, y + h / 2);
+			cv::rectangle(mask, cv::Rect(cv::Point(x, y), cv::Size(w, h)), cv::Scalar(255), -1);
+			cv::bitwise_and(handLayerPalm, mask, sub);
+
+			cv::Moments m = cv::moments(sub, true);
+			center2 = cv::Point(m.m10 / m.m00, m.m01 / m.m00);
+			hasCenter2 = true;
+
+			/*cv::rectangle(handLayerPalm, cv::Rect(cv::Point(x, y), cv::Size(w, h)), cv::Scalar(0, 0, 255), 1);
+			cv::circle(handLayerPalm, center, 4, cv::Scalar(0, 0, 255), -1);
+			cv::circle(handLayerPalm, center, handRadius, cv::Scalar(0, 0, 255), 1);*/
+		}
+	}
+
+
+	int start_region = 0;
+	bool regioning = false;
+	bool prev = false;
+	for (int i = 0; i < changingTable.size() - 4; i++) {
+		bool cur = changingTable[i];
+		bool next = changingTable[i + 4];
+
+		if (cur != prev && prev != next) {
+			prev = cur;
+			if (regioning) {
+				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 30, boundingBox.y + start_region), cv::Size(10, i - start_region)), cv::Scalar(128), -1);
+			}
+			else {
+				start_region = i;
+			}
+			regioning = !regioning;
+		}
+	}
+	if (regioning) {
+		cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 30, boundingBox.y + start_region), cv::Size(10, changingTable.size() - 4 - start_region)), cv::Scalar(128), -1);
+	}
+
+	cv::Mat palmCenter1Mask = cv::Mat::zeros(handLayerPalm.size(), CV_8UC1);
+	cv::Mat palmCenter2Mask = cv::Mat::zeros(handLayerPalm.size(), CV_8UC1);
+	cv::Mat palmTestCenter1, palmTestCenter2;
+	if (hasCenter1) {
+		cv::circle(palmCenter1Mask, center1, handRadius, cv::Scalar(255), -1);
+		palmPoint.x = center1.x;
+		palmPoint.y = center1.y;
+		/*cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
+		cv::circle(handLayerPalm, center1, handRadius, cv::Scalar(0, 0, 255), 1);*/
+	}
+	if (hasCenter2) {
+		/*cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 102, 255), 1);
+		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 102, 255), 1);*/
+		cv::circle(palmCenter2Mask, center2, handRadius, cv::Scalar(255), -1);
+		palmPoint.x = center2.x;
+		palmPoint.y = center2.y;
+	}
+
+	cv::bitwise_and(handLayerPalm, palmCenter1Mask, palmTestCenter1);
+	cv::bitwise_and(handLayerPalm, palmCenter2Mask, palmTestCenter2);
+	int whiteCenter1 = cv::countNonZero(palmTestCenter1);
+	int whiteCenter2 = cv::countNonZero(palmTestCenter2);
+
+	cv::imshow("Palm Test C1", palmTestCenter1);
+	cv::imshow("Palm Test C2", palmTestCenter2);
+
+	cv::cvtColor(handLayerPalm, handLayerPalm, cv::COLOR_GRAY2BGR);
+	cv::rectangle(handLayerPalm, boundingBox, cv::Scalar(0, 255, 0), 2);
+
+
+
+
+	if (whiteCenter1 > whiteCenter2) {
+		cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
+		cv::circle(handLayerPalm, center1, handRadius, cv::Scalar(0, 0, 255), 1);
+		palmPoint.x = center1.x;
+		palmPoint.y = center1.y;
 	}
 	else {
-		// use convex
-		double maxConvexDist = 0;
-		int edgeConvexIndex1 = 0;
-		int edgeConvexIndex2 = 0;
-
-		for (int i = 0; i < convex.size(); i++) {
-			for (int j = i + 1; j < convex.size(); j++) {
-				double d = calDistance(convex[i], convex[j]);
-				if (d > maxConvexDist) {
-					maxConvexDist = d;
-					edgeConvexIndex1 = i;
-					edgeConvexIndex2 = j;
-				}
-			}
-		}
-		cv::Point pe1 = convex[edgeConvexIndex1];
-		cv::Point pe2 = convex[edgeConvexIndex2];
-
-		
-		vector<cv::Point> intercepts;
-		for (int i = 0; i < convex.size(); i++) {
-			if (i == edgeConvexIndex1 || i == edgeConvexIndex2) {
-				cv::circle(handLayer3, convex[i], 4, cv::Scalar(0, 102, 255), -1);
-				continue;
-			}
-
-			cv::circle(handLayer3, convex[i], 4, cv::Scalar(0, 102, 255), 2);
-			cv::Point pi = convex[i];
-			cv::Vec2d l1 = calLinear(pi, pe1);
-			cv::Vec2d l2 = calLinear(pi, pe2);
-			cv::Point mp1 = calMedianPoint(pi, pe1);
-			cv::Point mp2 = calMedianPoint(pi, pe2);
-			cv::Vec2d lp1 = calPerpendicularLine(l1, mp1);
-			cv::Vec2d lp2 = calPerpendicularLine(l2, mp2);
-			cv::Point intercept = calInterceptPoint(lp1, lp2);
-
-			intercepts.push_back(intercept);
-		}
-
-		cv::Point center = calCentroid(intercepts);
-		/*palmPoint.x = center.x;
-		palmPoint.y = center.y;*/
-
-		cv::circle(handLayer3, center, handRadius, cv::Scalar(0, 255, 0), 2);
-		cv::circle(handLayer3, center, 4, cv::Scalar(0, 255, 0), -1);
+		cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 102, 255), 1);
+		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 102, 255), 1);
+		palmPoint.x = center2.x;
+		palmPoint.y = center2.y;
 	}
 
-	cv::circle(handLayer3, handPoint, handRadius, cv::Scalar(255, 0, 0), 2);
-	cv::circle(handLayer3, handPoint, 4, cv::Scalar(255, 0, 0), -1);
-	/*cv::circle(handLayer3, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
-	cv::circle(handLayer3, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);*/
+	// find wrist point
+	cv::Point wristPoint = cv::Point(0, 0);
+	for (int i = 0; i < concavePoints.size(); i++)
+	{
+		if (concavePoints[i].x < palmPoint.x && concavePoints[i].y > wristPoint.y)
+			wristPoint = concavePoints[i];
+	}
+
+	double wristAngle = calAnglePoint(palmPoint, wristPoint);
+
+	for (int i = 0; i < concavePoints.size(); i++)
+	{
+		cv::Point concave = concavePoints[i];
+
+		//cv::line(handLayerPalm, cv::Point(concave.x, boundingBox.y), cv::Point(concave.x, boundingBox.y + boundingBox.height), cv::Scalar(0, 102, 255), 2);
+		cv::Point2d concavePolar = convertPointCartesianToPolar(concave, palmPoint);
+
+		double theta = calAnglePoint(palmPoint, concave);
+
+		if (theta > PI)
+			cv::circle(handLayerPalm, concave, 6, cv::Scalar(0, 255, 255), 2);
+
+		cout << "concave angle " << theta << ":" << theta - wristAngle << endl;
+
+		int border = 2;
+		if (abs(theta) > PI / 2)
+			border = -1;
+		if (theta < 0) {
+			cv::circle(handLayerPalm, concave, 4, cv::Scalar(0, 0, 255), border);
+		}
+		else {
+			cv::circle(handLayerPalm, concave, 4, cv::Scalar(0, 102, 255), border);
+		}
+
+		cv::Point endPoint1 = calRadiusPoint(theta, handRadius, palmPoint);
+		cv::circle(handLayerPalm, wristPoint, 4, cv::Scalar(0, 255, 0), -1);
+		//cv::line(handLayerPalm, palmPoint, endPoint1, cv::Scalar(0, 255, 0), 2);
+	}
+
+	double estimateAngle[] = {
+		3.5, 2.8, 2.2, 1.3
+	};
+	for (int i = 0; i < 4; i++)
+	{
+		cv::Point endPoint = calRadiusPoint(estimateAngle[i] + wristAngle, handRadius, palmPoint);
+		cv::line(handLayerPalm, palmPoint, endPoint, cv::Scalar(0, i * 50, 255), 2);
+	}
+	cv::line(handLayerPalm, palmPoint, wristPoint, cv::Scalar(0, 255, 0), 2);
+
+	cv::circle(handLayerPalm, wristPoint, 4, cv::Scalar(0, 255, 0), -1);
 }
 
 void Application::evaluateHandLayerPalm()
@@ -1710,6 +1808,25 @@ vector<cv::Point> Application::findLargestContour(cv::Mat in)
 	return largestContour;
 }
 
+vector<cv::Point> Application::findConcavePoints(vector<cv::Point> contour, vector<int> hull, int threshold)
+{
+	vector<cv::Point> concavePoints;
+	vector<cv::Vec4i> defect;
+	cv::convexityDefects(contour, hull, defect);
+
+	for (int i = 0; i < defect.size(); i++) {
+		cv::Vec4i v = defect[i];
+		int depth = v[3];
+		if (depth < threshold) {
+			continue;
+		}
+
+		cv::Point farPoint = contour[v[2]];
+		concavePoints.push_back(farPoint);
+	}
+	return concavePoints;
+}
+
 void Application::sendData()
 {
 	adapterCaller.sendData(finger3ds);
@@ -1743,6 +1860,23 @@ void Application::captureFrame()
 	
 	//cv::imwrite(buffer_1, HL1_COR);
 
+}
+
+cv::Point Application::EL3_findMinConcave(vector<cv::Point> concavePoints)
+{
+	if (concavePoints.size() == 0)
+		return cv::Point(0, 0);
+	cv::Point minConcave;
+	int minConcaveX = 640;
+	minConcave = concavePoints[0];
+	for (int i = 0; i < concavePoints.size(); i++)
+	{
+		if (concavePoints[i].x < minConcaveX) {
+			minConcaveX = concavePoints[i].x;
+			minConcave = concavePoints[i];
+		}
+	}
+	return minConcave;
 }
 
 void Application::calculateContourArea(vector<cv::Point> contour, double * area)

@@ -144,11 +144,14 @@ protected :
 	double calLinerAngleByPoint(cv::Vec2d l, cv::Point p);
 
 	vector<cv::Point> findLargestContour(cv::Mat in);
+	vector<cv::Point> findConcavePoints(vector<cv::Point> contour, vector<int> hull, int threshold);
 
 	void sendData();
 
 	void captureFrame();
 private:
+
+	cv::Point EL3_findMinConcave(vector<cv::Point> concavePoints);
 	KinectReader kinectReader;
 	void calculateContourArea(vector<cv::Point> contour, double *area);
 	int performKeyboardEvent(int key);
