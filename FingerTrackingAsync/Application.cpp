@@ -547,7 +547,11 @@ void Application::evaluateHandLayer3()
 
 	cv::Point minConcave;
 	if (concavePoints.size() > 0) {
+		cv::Mat hideThumbMask(handLayerPalm.size(), CV_8UC1, cv::Scalar(255));
 		minConcave = EL3_findMinConcave(concavePoints);
+
+		cv::rectangle(hideThumbMask, cv::Rect(cv::Point(boundingBox.x, boundingBox.y), cv::Size(minConcave.x - boundingBox.x, boundingBox.height)), cv::Scalar(128), -1);
+		cv::bitwise_and(hideThumbMask, handLayerPalm, handLayerPalm);
 	}
 
 
