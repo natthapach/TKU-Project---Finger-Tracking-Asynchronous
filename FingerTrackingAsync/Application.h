@@ -103,7 +103,10 @@ protected :
 	vector<cv::Point> fingerL2Point;
 	vector<cv::Point> hullL2;
 	vector<cv::Point> fingerPointL12;
+
+	
 	cv::Rect palmRect;
+	vector<cv::Point> extendedFinger;
 
 	cv::MatND hist;
 	

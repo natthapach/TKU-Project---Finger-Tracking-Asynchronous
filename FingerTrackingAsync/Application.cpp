@@ -468,43 +468,22 @@ void Application::evaluateHandLayer1() // ~66ms
 void Application::evaluateHandLayer2()	// 7ms
 {
 
-	vector<vector<cv::Point>> contours;
-	vector<cv::Vec4i> hierachy;
-	cv::findContours(handLayer2, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0,0));
-	vector<vector<cv::Point>> convexHull(contours.size());
-	vector<vector<int>> convexHullI(contours.size());
-	double largestArea = 0;
-	int largestIndex = 0;
-	for (int i = 0; i < contours.size(); i++) {
-		cv::convexHull(contours[i], convexHull[i]);
-		cv::convexHull(contours[i], convexHullI[i]);
-
-		double a = cv::contourArea(contours[i]);
-		if (a > largestArea) {
-			largestArea = a;
-			largestIndex = i;
-		}
-	}
-	if (largestArea == 0)
-		return;
-
-	hullL2.clear();
-	for (int i = 0; i < convexHull[largestIndex].size(); i++) {
-		hullL2.push_back(convexHull[largestIndex][i]);
-	}
+	vector<cv::Point> largestContour = findLargestContour(handLayer2);
+	vector<int> hull;
+	cv::convexHull(largestContour, hull);
 
 	vector<cv::Point> semi_fingerPoint, abyss_finger;
 	cv::cvtColor(handLayer2, handLayer2, cv::COLOR_GRAY2BGR);
 	vector<cv::Vec4i> defect;
-	cv::convexityDefects(contours[largestIndex], convexHullI[largestIndex], defect);
+	cv::convexityDefects(largestContour, hull, defect);
 
 	for (int i = 0; i < defect.size(); i++) {
 		cv::Vec4i v = defect[i];
 		int depth = v[3];
 		if (depth > CONVEX_DEPTH_THRESHOLD_LAYER_2) {
-			cv::Point startPoint = contours[largestIndex][v[0]];
-			cv::Point endPoint = contours[largestIndex][v[1]];
-			cv::Point farPoint = contours[largestIndex][v[2]];
+			cv::Point startPoint = largestContour[v[0]];
+			cv::Point endPoint = largestContour[v[1]];
+			cv::Point farPoint = largestContour[v[2]];
 
 			double ms = ((double)(startPoint.y - farPoint.y)) / (startPoint.x - farPoint.x);
 			double me = ((double)(endPoint.y - farPoint.y)) / (endPoint.x - farPoint.x);
@@ -517,18 +496,10 @@ void Application::evaluateHandLayer2()	// 7ms
 		}
 	}
 	
-	clusterPoint(semi_fingerPoint, fingerL2Point, DISTANCE_THESHOLD);
-	int count = 0;
-	for (int i = 0; i < fingerL2Point.size(); i++) {
-		cv::circle(handLayer2, fingerL2Point[i], 4, cv::Scalar(0, 255, 0), 2);
-		count += 1;
+	clusterPoint(semi_fingerPoint, extendedFinger, DISTANCE_THESHOLD);
+	for (int i = 0; i < extendedFinger.size(); i++) {
+		cv::circle(handLayer2, extendedFinger[i], 4, cv::Scalar(0, 255, 0), 2);
 	}
-	if (count == 0)
-		return;
-
-	// find finger centroid point
-	cv::Point fingerCentroid = calCentroid(fingerL2Point);
-	cv::circle(handLayer2, fingerCentroid, 4, cv::Scalar(100, 255, 100), -1);
 }
 
 void Application::evaluateHandLayer3()
