@@ -469,6 +469,8 @@ void Application::evaluateHandLayer2()	// 7ms
 {
 
 	vector<cv::Point> largestContour = findLargestContour(handLayer2);
+	if (largestContour.size() == 0) return;
+
 	vector<int> hull;
 	cv::convexHull(largestContour, hull);
 
