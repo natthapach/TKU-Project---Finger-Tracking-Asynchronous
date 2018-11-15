@@ -53,6 +53,10 @@ protected :
 
 	const double ASSIGN_FINGER_ANGLE_THRESHOLD = (5 * PI / 180);
 
+	const int SCAN_PALM_PADDING = 5;
+	const int SCAN_PALM_EXCEPT_HOLE = 2;
+	const int SCAN_TABLE_EXCEPT_HOLE = 4;
+
 	const string WINDOW_RGB = "RGB";
 	const string WINDOW_DEPTH = "Depth";
 	const string WINDOW_MASK_L1 = "Mask Layer 1";
@@ -99,6 +103,7 @@ protected :
 	vector<cv::Point> fingerL2Point;
 	vector<cv::Point> hullL2;
 	vector<cv::Point> fingerPointL12;
+	cv::Rect palmRect;
 
 	cv::MatND hist;
 	
@@ -150,9 +155,13 @@ protected :
 
 	void captureFrame();
 private:
+	KinectReader kinectReader;
 
 	cv::Point EL3_findMinConcave(vector<cv::Point> concavePoints);
-	KinectReader kinectReader;
+	void EL3_buildTable(cv::Mat in, cv::Rect boundingBox, vector<bool>& acceptTransitionTable, vector<bool>& acceptLengthTable);
+	cv::Vec2i EL3_findMaxRegion(vector<bool> acceptTransitionTable, vector<bool> acceptLengthTable);
+	cv::Point EL3_findRegionCenter(cv::Mat in, cv::Rect region);
+	int EL3_countWhitePoint(cv::Mat in, cv::Point point, int radius);
 	void calculateContourArea(vector<cv::Point> contour, double *area);
 	int performKeyboardEvent(int key);
 

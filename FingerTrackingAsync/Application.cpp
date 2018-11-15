@@ -38,9 +38,9 @@ void Application::start()
 			
 			buildDepthHandMask();
 			buildHand3Layers();
-
-			evaluateHandLayerPalm();
-			evaluateHandLayerCut();
+			evaluateHandLayer3();
+			//evaluateHandLayerPalm();
+			//evaluateHandLayerCut();
 
 			thread evaluateHandLayer1T = thread(&Application::evaluateHandLayer1, this);
 			thread evaluateHandLater2T = thread(&Application::evaluateHandLayer2, this);
@@ -48,7 +48,7 @@ void Application::start()
 			evaluateHandLater2T.join();
 			evaluateHandLayer1T.join();
 
-			evaluateHandLayer3();
+			
 			evaluate3Layer();
 
 			assignFingerId();
@@ -535,8 +535,9 @@ void Application::evaluateHandLayer3()
 {
 	// find largest contour and fill on
 	vector<cv::Point> largestContour = findLargestContour(handLayer3);
-	cv::drawContours(handLayerPalm, vector<vector<cv::Point>> {largestContour}, 0, cv::Scalar(255), -1);
-
+	if (largestContour.size() == 0) return;
+	cv::drawContours(handLayer3, vector<vector<cv::Point>> {largestContour}, 0, cv::Scalar(255), -1);
+	
 	// find bounding box to define resion
 	cv::Rect boundingBox = cv::boundingRect(largestContour);
 
@@ -551,259 +552,56 @@ void Application::evaluateHandLayer3()
 		minConcave = EL3_findMinConcave(concavePoints);
 
 		cv::rectangle(hideThumbMask, cv::Rect(cv::Point(boundingBox.x, boundingBox.y), cv::Size(minConcave.x - boundingBox.x, boundingBox.height)), cv::Scalar(128), -1);
-		cv::bitwise_and(hideThumbMask, handLayerPalm, handLayerPalm);
+		cv::bitwise_and(hideThumbMask, handLayer3, handLayer3);
 	}
 
-
-	vector<cv::Vec2i> regions;
-	vector<bool> changingTable(boundingBox.height + 4, false);
-	vector<bool> acceptVariationTable(boundingBox.height, false);
+	vector<bool> acceptTransitionTable(boundingBox.height, false);
 	vector<bool> acceptLengthTable(boundingBox.height, false);
-	for (int y = boundingBox.y; y < boundingBox.y + boundingBox.height; y++) {
-		uchar* handPalmRow = handLayerPalm.ptr<uchar>(y);
-		int changing = 0;
-		int prev = 0;
-		int countWhite = 0;
-		for (int x = boundingBox.x - 5; x < boundingBox.x + boundingBox.width + 5; x++) {
-			int cur = handPalmRow[x];
-			int rawCur = cur;
-			int next = handPalmRow[x + 2];
+	EL3_buildTable(handLayer3, boundingBox, acceptTransitionTable, acceptLengthTable);
 
-			if (cur == 128) cur = 0;
-			if (next == 128) next = 0;
-			if (rawCur == 128) rawCur = 255;
+	cv::Vec2i maxRegion = EL3_findMaxRegion(acceptTransitionTable, acceptLengthTable);
+	
+	palmRect = cv::Rect(cv::Point(boundingBox.x, boundingBox.y + maxRegion[0]), cv::Size(boundingBox.width, maxRegion[1] - maxRegion[0]));
 
-			if (cur != prev && prev != next) {
-				changing += 1;
-				prev = cur;
-			}
-
-			if (rawCur == 255) {
-				countWhite += 1;
-			}
-		}
-
-		if (changing <= 2) {
-			if (countWhite >= 1.5*handRadius) {
-				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 10, y), cv::Size(10, 1)), cv::Scalar(255), -1);
-				acceptLengthTable[y - boundingBox.y] = true;
-			}
-			else {
-				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 10, y), cv::Size(10, 1)), cv::Scalar(128), -1);
-			}
-			changingTable[y - boundingBox.y] = true;
-			acceptVariationTable[y - boundingBox.y] = true;
-		}
+	cv::Point center1 = EL3_findRegionCenter(handLayer3, palmRect);
+	cv::Point center2;
+	int white1 = 0, white2 = 0;
+	white1 = EL3_countWhitePoint(handLayer3, center1, handRadius);
+	if (concavePoints.size() > 0) {
+		center2 = EL3_findRegionCenter(handLayer3, cv::Rect(cv::Point(minConcave.x, palmRect.y), cv::Size(palmRect.width - (minConcave.x-palmRect.x), palmRect.height)));
+		white2 = EL3_countWhitePoint(handLayer3, center2, handRadius);
 	}
-
-	int start_accept_length = -1;
-	int maxRange = -1;
-	int maxStart = -1;
-	int maxEnd = -1;
-	for (int i = 0; i < acceptLengthTable.size(); i++)
+	
+	if (white1 > white2)
 	{
-		if (acceptLengthTable[i]) {
-			if (start_accept_length == -1) {
-				start_accept_length = i;
-			}
-		}
-		else {
-			if (start_accept_length != -1) {
-				bool isMergeSection = false;
-				for (int j = 1; j <= 10 && i + j < acceptLengthTable.size(); j++) {
-					if (acceptLengthTable[i + j]) {
-						isMergeSection = true;
-						break;
-					}
-				}
-				if (isMergeSection) {
-					continue;
-				}
-				int range = i - start_accept_length;
-				if (range > maxRange) {
-					maxRange = range;
-					maxStart = start_accept_length;
-					maxEnd = i;
-				}
-				start_accept_length = -1;
-			}
-		}
-	}
-	if (start_accept_length != -1) {
-		int range = acceptLengthTable.size() - start_accept_length;
-		if (range > maxRange) {
-			maxRange = range;
-			maxStart = start_accept_length;
-			maxEnd = acceptLengthTable.size();
-		}
-	}
-
-	cv::Point center1, center2;
-	bool hasCenter1 = false, hasCenter2 = false;
-	if (maxRange != -1) {
-		cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 50, boundingBox.y + maxStart), cv::Size(10, maxRange)), cv::Scalar(255, 255, 255), -1);
-
-		// start palm mask
-		palmMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
-		cv::rectangle(palmMask, cv::Rect(cv::Point(boundingBox.x, boundingBox.y + maxStart), cv::Size(boundingBox.width + 10, maxRange)), cv::Scalar(255), -1);
-		// end palm mask
-		{
-			cv::Mat mask(handLayerPalm.size(), CV_8UC1, cv::Scalar(0));
-			cv::Mat sub;
-			int x = boundingBox.x;
-			int y = boundingBox.y + maxStart;
-			int w = boundingBox.width;
-			int h = maxRange;
-			cv::Point center(x + w / 2, y + h / 2);
-			cv::rectangle(mask, cv::Rect(cv::Point(x, y), cv::Size(w, h)), cv::Scalar(255), -1);
-			cv::bitwise_and(handLayerPalm, mask, sub);
-			cv::Moments m = cv::moments(sub, true);
-			center1 = cv::Point(m.m10 / m.m00, m.m01 / m.m00);
-			hasCenter1 = true;
-			/*cv::rectangle(handLayerPalm, cv::Rect(cv::Point(x, y), cv::Size(w, h)), cv::Scalar(0, 0, 255), 1);
-			cv::circle(handLayerPalm, center, 4, cv::Scalar(0, 0, 255), -1);
-			cv::circle(handLayerPalm, center, handRadius, cv::Scalar(0, 0, 255), 1);*/
-		}
-
-		if (concavePoints.size() > 0) {
-			cv::Mat mask(handLayerPalm.size(), CV_8UC1, cv::Scalar(0));
-			cv::Mat sub;
-			int x = minConcave.x;
-			int y = boundingBox.y + maxStart;
-			int w = boundingBox.x + boundingBox.width - minConcave.x;
-			int h = maxRange;
-			cv::Point center(x + w / 2, y + h / 2);
-			cv::rectangle(mask, cv::Rect(cv::Point(x, y), cv::Size(w, h)), cv::Scalar(255), -1);
-			cv::bitwise_and(handLayerPalm, mask, sub);
-
-			cv::Moments m = cv::moments(sub, true);
-			center2 = cv::Point(m.m10 / m.m00, m.m01 / m.m00);
-			hasCenter2 = true;
-
-			/*cv::rectangle(handLayerPalm, cv::Rect(cv::Point(x, y), cv::Size(w, h)), cv::Scalar(0, 0, 255), 1);
-			cv::circle(handLayerPalm, center, 4, cv::Scalar(0, 0, 255), -1);
-			cv::circle(handLayerPalm, center, handRadius, cv::Scalar(0, 0, 255), 1);*/
-		}
-	}
-
-
-	int start_region = 0;
-	bool regioning = false;
-	bool prev = false;
-	for (int i = 0; i < changingTable.size() - 4; i++) {
-		bool cur = changingTable[i];
-		bool next = changingTable[i + 4];
-
-		if (cur != prev && prev != next) {
-			prev = cur;
-			if (regioning) {
-				cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 30, boundingBox.y + start_region), cv::Size(10, i - start_region)), cv::Scalar(128), -1);
-			}
-			else {
-				start_region = i;
-			}
-			regioning = !regioning;
-		}
-	}
-	if (regioning) {
-		cv::rectangle(handLayerPalm, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 30, boundingBox.y + start_region), cv::Size(10, changingTable.size() - 4 - start_region)), cv::Scalar(128), -1);
-	}
-
-	cv::Mat palmCenter1Mask = cv::Mat::zeros(handLayerPalm.size(), CV_8UC1);
-	cv::Mat palmCenter2Mask = cv::Mat::zeros(handLayerPalm.size(), CV_8UC1);
-	cv::Mat palmTestCenter1, palmTestCenter2;
-	if (hasCenter1) {
-		cv::circle(palmCenter1Mask, center1, handRadius, cv::Scalar(255), -1);
-		palmPoint.x = center1.x;
-		palmPoint.y = center1.y;
-		/*cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
-		cv::circle(handLayerPalm, center1, handRadius, cv::Scalar(0, 0, 255), 1);*/
-	}
-	if (hasCenter2) {
-		/*cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 102, 255), 1);
-		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 102, 255), 1);*/
-		cv::circle(palmCenter2Mask, center2, handRadius, cv::Scalar(255), -1);
-		palmPoint.x = center2.x;
-		palmPoint.y = center2.y;
-	}
-
-	cv::bitwise_and(handLayerPalm, palmCenter1Mask, palmTestCenter1);
-	cv::bitwise_and(handLayerPalm, palmCenter2Mask, palmTestCenter2);
-	int whiteCenter1 = cv::countNonZero(palmTestCenter1);
-	int whiteCenter2 = cv::countNonZero(palmTestCenter2);
-
-	cv::imshow("Palm Test C1", palmTestCenter1);
-	cv::imshow("Palm Test C2", palmTestCenter2);
-
-	cv::cvtColor(handLayerPalm, handLayerPalm, cv::COLOR_GRAY2BGR);
-	cv::rectangle(handLayerPalm, boundingBox, cv::Scalar(0, 255, 0), 2);
-
-
-
-
-	if (whiteCenter1 > whiteCenter2) {
-		cv::circle(handLayerPalm, center1, 4, cv::Scalar(0, 0, 255), 1);
-		cv::circle(handLayerPalm, center1, handRadius, cv::Scalar(0, 0, 255), 1);
 		palmPoint.x = center1.x;
 		palmPoint.y = center1.y;
 	}
 	else {
-		cv::circle(handLayerPalm, center2, 4, cv::Scalar(0, 102, 255), 1);
-		cv::circle(handLayerPalm, center2, handRadius, cv::Scalar(0, 102, 255), 1);
 		palmPoint.x = center2.x;
 		palmPoint.y = center2.y;
 	}
-
-	// find wrist point
-	cv::Point wristPoint = cv::Point(0, 0);
-	for (int i = 0; i < concavePoints.size(); i++)
+	cv::bitwise_or(handLayer3, handMask, handLayer3);
+	/*for (int i = 0; i < acceptTransitionTable.size(); i++)
 	{
-		if (concavePoints[i].x < palmPoint.x && concavePoints[i].y > wristPoint.y)
-			wristPoint = concavePoints[i];
-	}
-
-	double wristAngle = calAnglePoint(palmPoint, wristPoint);
-
-	for (int i = 0; i < concavePoints.size(); i++)
-	{
-		cv::Point concave = concavePoints[i];
-
-		//cv::line(handLayerPalm, cv::Point(concave.x, boundingBox.y), cv::Point(concave.x, boundingBox.y + boundingBox.height), cv::Scalar(0, 102, 255), 2);
-		cv::Point2d concavePolar = convertPointCartesianToPolar(concave, palmPoint);
-
-		double theta = calAnglePoint(palmPoint, concave);
-
-		if (theta > PI)
-			cv::circle(handLayerPalm, concave, 6, cv::Scalar(0, 255, 255), 2);
-
-		cout << "concave angle " << theta << ":" << theta - wristAngle << endl;
-
-		int border = 2;
-		if (abs(theta) > PI / 2)
-			border = -1;
-		if (theta < 0) {
-			cv::circle(handLayerPalm, concave, 4, cv::Scalar(0, 0, 255), border);
-		}
-		else {
-			cv::circle(handLayerPalm, concave, 4, cv::Scalar(0, 102, 255), border);
+		if (acceptTransitionTable[i])
+		{
+			cv::line(handLayer3, cv::Point(boundingBox.x + boundingBox.width + 10, boundingBox.y + i), cv::Point(boundingBox.x + boundingBox.width + 20, boundingBox.y + i), cv::Scalar(128), 1);
 		}
 
-		cv::Point endPoint1 = calRadiusPoint(theta, handRadius, palmPoint);
-		cv::circle(handLayerPalm, wristPoint, 4, cv::Scalar(0, 255, 0), -1);
-		//cv::line(handLayerPalm, palmPoint, endPoint1, cv::Scalar(0, 255, 0), 2);
+		if (acceptTransitionTable[i] &&  acceptLengthTable[i])
+		{
+			cv::line(handLayer3, cv::Point(boundingBox.x + boundingBox.width + 10, boundingBox.y + i), cv::Point(boundingBox.x + boundingBox.width + 20, boundingBox.y + i), cv::Scalar(255), 1);
+		}
 	}
 
-	double estimateAngle[] = {
-		3.5, 2.8, 2.2, 1.3
-	};
-	for (int i = 0; i < 4; i++)
-	{
-		cv::Point endPoint = calRadiusPoint(estimateAngle[i] + wristAngle, handRadius, palmPoint);
-		cv::line(handLayerPalm, palmPoint, endPoint, cv::Scalar(0, i * 50, 255), 2);
-	}
-	cv::line(handLayerPalm, palmPoint, wristPoint, cv::Scalar(0, 255, 0), 2);
+	cv::rectangle(handLayer3, cv::Rect(cv::Point(boundingBox.x + boundingBox.width + 30, boundingBox.y + maxRegion[0]), cv::Size(10, maxRegion[1] - maxRegion[0])), cv::Scalar(255, -1));
 
-	cv::circle(handLayerPalm, wristPoint, 4, cv::Scalar(0, 255, 0), -1);
+	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
+
+	cv::circle(handLayer3, palmPoint, 4, cv::Scalar(0, 255, 0), -1);
+	cv::circle(handLayer3, palmPoint, handRadius, cv::Scalar(0, 255, 0), 2);
+*/
 }
 
 void Application::evaluateHandLayerPalm()
@@ -1881,6 +1679,151 @@ cv::Point Application::EL3_findMinConcave(vector<cv::Point> concavePoints)
 		}
 	}
 	return minConcave;
+}
+
+void Application::EL3_buildTable(cv::Mat in, cv::Rect boundingBox, vector<bool>& acceptTransitionTable, vector<bool>& acceptLengthTable)
+{
+	int start_y = boundingBox.y;
+	int end_y = boundingBox.y + boundingBox.height;
+	int start_x = boundingBox.x - SCAN_PALM_PADDING;
+	int end_x = boundingBox.x + boundingBox.width + SCAN_PALM_PADDING;
+	for (int y = start_y; y < end_y; y++)
+	{
+		// scan from top-bounding to bottom-bounding
+		uchar* handPalmRow = handLayer3.ptr<uchar>(y);
+		int changing = 0;
+		int prev = 0;
+		int countNonZero = 0;
+
+		// scan from left-padding to right-padding
+		int x = start_x;
+		while (x < end_x) {
+			int cur = handPalmRow[x];
+			if (cur == 255 || cur == 128)
+				countNonZero++;
+
+			if (cur == 128) cur = 0;
+
+			if (cur != prev) {
+				// scan hole, find the same prev in next
+				int i = 1;
+				bool except = false;
+				while (i <= SCAN_PALM_EXCEPT_HOLE) {
+					int next = handPalmRow[x + i];
+					if (next == 128) next = 0;
+					if (next == prev) {
+						except = true;
+						break;
+					}
+					i++;
+				}
+
+				x = x + i;
+				if (!except) {
+					prev = cur;
+					changing++;
+				}
+				continue;
+			}
+
+			x++;
+		}
+
+		if (changing <= 2) {
+			acceptTransitionTable[y - boundingBox.y] = true;
+		}
+		if (countNonZero >= 1.6*handRadius) {
+			acceptLengthTable[y - boundingBox.y] = true;
+		}
+	}
+}
+
+cv::Vec2i Application::EL3_findMaxRegion(vector<bool> acceptTransitionTable, vector<bool> acceptLengthTable)
+{
+	vector<cv::Vec2i> regions;
+	int start = -1;
+	int end = -1;
+	bool prev = false;
+
+	// create regions
+	int i = 0;
+	while (i < acceptTransitionTable.size()) {
+		bool at = acceptTransitionTable[i];
+		bool al = acceptLengthTable[i];
+		if (at && al) {
+			if (start == -1) {
+				start = i;
+			}
+		}
+		else {
+			if (start != -1) {
+				bool except = false;
+				int j = 1;
+				while (j <= SCAN_TABLE_EXCEPT_HOLE && i+j < acceptTransitionTable.size()) {
+					bool atj = acceptTransitionTable[i + j];
+					bool alj = acceptLengthTable[i + j];
+					
+					if (atj && alj) {
+						except = true;
+						break;
+					}
+
+					j++;
+				}
+				
+				if (!except) {
+					end = i;
+					regions.push_back(cv::Vec2i(start, end));
+					start = -1;
+					end = -1;
+				}
+
+				i = i + j;
+				continue;
+			}
+		}
+
+		i++;
+	}
+	
+	if (start != -1) {
+		regions.push_back(cv::Vec2i(start, acceptTransitionTable.size() - 1));
+	}
+
+	// find max region
+	int maxValue = 0;
+	cv::Vec2i maxRegion = cv::Vec2i(0, 0);
+	for (int i = 0; i < regions.size(); i++)
+	{
+		cv::Vec2i region = regions[i];
+		if (region[1] - region[0] > maxValue) {
+			maxValue = region[1] - region[0];
+			maxRegion = region;
+		}
+	}
+	return maxRegion;
+}
+
+cv::Point Application::EL3_findRegionCenter(cv::Mat in, cv::Rect region)
+{
+	cv::Mat mask = cv::Mat::zeros(in.size(), CV_8UC1);
+	cv::Mat sub;
+	cv::rectangle(mask, region, cv::Scalar(255), -1);
+	cv::bitwise_and(in, mask, sub);
+	cv::Moments m = cv::moments(sub, true);
+	cv::Point center = cv::Point(m.m10 / m.m00, m.m01 / m.m00);
+	
+	return center;
+}
+
+int Application::EL3_countWhitePoint(cv::Mat in, cv::Point point, int radius)
+{
+	cv::Mat mask = cv::Mat::zeros(in.size(), CV_8UC1);
+	cv::Mat test;
+	cv::circle(mask, point, radius, cv::Scalar(255), -1);
+	cv::bitwise_and(in, mask, test);
+	int white = cv::countNonZero(test);
+	return white;
 }
 
 void Application::calculateContourArea(vector<cv::Point> contour, double * area)
