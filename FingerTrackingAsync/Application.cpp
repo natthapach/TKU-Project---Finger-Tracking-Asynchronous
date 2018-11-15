@@ -38,9 +38,10 @@ void Application::start()
 			
 			buildDepthHandMask();
 			buildHand3Layers();
+
 			evaluateHandLayer3();
-			//evaluateHandLayerPalm();
-			//evaluateHandLayerCut();
+
+			evaluateHandLayerCut();
 
 			thread evaluateHandLayer1T = thread(&Application::evaluateHandLayer1, this);
 			thread evaluateHandLater2T = thread(&Application::evaluateHandLayer2, this);
@@ -62,6 +63,7 @@ void Application::start()
 			//cv::imshow("Edge", edgeColorFrame);
 			cv::imshow("Palm", handLayerPalm);
 			cv::imshow("Cut", handLayerCut);
+			cv::imshow("Cut Mask", cutMask);
 			//cv::imshow("histogram", histogramFrame);
 		}
 
@@ -889,9 +891,19 @@ void Application::evaluateHandLayerPalm()
 
 void Application::evaluateHandLayerCut()
 {
-	handLayer3.copyTo(handLayerCut);
+	cutMask = cv::Mat(cv::Size(640, 480), CV_8UC1, cv::Scalar(255));
+	cv::Mat sub, handLayer3_inverse;
+	cv::Mat palmMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
+	handLayer3.copyTo(sub);
 
-	vector<cv::Point> contourO = findLargestContour(handLayerCut);
+	cv::Rect modifyPalmRect = cv::Rect(cv::Point(palmRect.x, palmRect.y), cv::Size(palmRect.width + 10, palmRect.height));
+	cv::rectangle(palmMask, modifyPalmRect, cv::Scalar(255), -1);
+	cv::bitwise_not(handLayer3, handLayer3_inverse);
+	cv::bitwise_and(handLayer3_inverse, palmMask, sub);
+
+	cv::imshow("cut sub", sub);
+
+	vector<cv::Point> contourO = findLargestContour(sub);
 	if (contourO.size() == 0)
 		return;
 	vector<int> hullO;
@@ -907,13 +919,10 @@ void Application::evaluateHandLayerCut()
 			concave.push_back(contourO[v[2]]);
 		}
 	}
-
-	cv::bitwise_and(handLayerCut, palmMask, handLayerCut);
-	cv::bitwise_not(handLayerCut, handLayerCut, palmMask);
 	
 	vector<vector<cv::Point>> contours;
 	vector<cv::Vec4i> hierachy;
-	cv::findContours(handLayerCut, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+	cv::findContours(sub, contours, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 	vector<vector<cv::Point>> hulls(contours.size());
 	for (int i = 0; i < contours.size(); i++)
 	{
@@ -988,6 +997,7 @@ void Application::evaluateHandLayerCut()
 			cv::line(handLayerCut, ppl1, ppl2, cv::Scalar(0, 255, 0), 1);
 
 			cv::line(handLayer1, ppl1, ppl2, cv::Scalar(0), 2);
+			cv::line(cutMask, ppl1, ppl2, cv::Scalar(0), 2);
 			cv::circle(handLayerCut, predictConcaves[i], 4, cv::Scalar(0, 102, 255), -1);
 		}
 

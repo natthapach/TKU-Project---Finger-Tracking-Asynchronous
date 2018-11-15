@@ -91,7 +91,7 @@ protected :
 	cv::Mat handLayerCut = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat handLayerAbs = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat palmMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
-
+	cv::Mat cutMask = cv::Mat(cv::Size(640, 480), CV_8UC1, cv::Scalar(255));
 	cv::Point handPoint;
 	int handRadius;
 
@@ -101,8 +101,7 @@ protected :
 	vector<vector<cv::Point>> contoursL1;
 	map<int, vector<cv::Point>> cornerGroup;
 	vector<cv::Point> fingerL2Point;
-	vector<cv::Point> hullL2;
-	vector<cv::Point> fingerPointL12;
+	vector<cv::Point> fingerPointL12;  
 
 	
 	cv::Rect palmRect;
