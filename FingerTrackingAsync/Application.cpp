@@ -43,11 +43,13 @@ void Application::start()
 
 			evaluateHandLayerCut();
 
-			thread evaluateHandLayer1T = thread(&Application::evaluateHandLayer1, this);
+			evaluateHandLayer2();
+			evaluateHandLayer1();
+			/*thread evaluateHandLayer1T = thread(&Application::evaluateHandLayer1, this);
 			thread evaluateHandLater2T = thread(&Application::evaluateHandLayer2, this);
 
 			evaluateHandLater2T.join();
-			evaluateHandLayer1T.join();
+			evaluateHandLayer1T.join();*/
 
 			
 			evaluate3Layer();
@@ -386,9 +388,9 @@ void Application::buildEdgeMask()
 
 void Application::evaluateHandLayer1() // ~66ms
 {
-	/*cv::bitwise_and(handLayer1, edgeMask, handLayer1);
-	cv::Mat openningKernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
-	cv::morphologyEx(handLayer1, handLayer1, cv::MORPH_OPEN, openningKernel, cv::Point(-1, -1), 2);*/
+	if (extendedFinger.size() < 3) {
+		cv::bitwise_and(handLayer1, cutMask, handLayer1);
+	}
 	handLayer1Corners.clear();
 	cv::Mat corner;
 	cv::cornerHarris(handLayer1, corner, 8, 5, 0.04, cv::BORDER_DEFAULT);
@@ -441,6 +443,7 @@ void Application::evaluateHandLayer1() // ~66ms
 		double area = cv::contourArea(contoursL1[it->first]);
 		if (area < AREA_CONTOUR_THRESHOLD) {
 			ignoreContours.push_back(it->first);
+			cv::drawContours(handLayer1, contoursL1, it->first, cv::Scalar(0, 0, 255), -1);
 			continue;
 		}
 	}
@@ -477,7 +480,6 @@ void Application::evaluateHandLayer2()	// 7ms
 	cv::convexHull(largestContour, hull);
 
 	vector<cv::Point> semi_fingerPoint, abyss_finger;
-	cv::cvtColor(handLayer2, handLayer2, cv::COLOR_GRAY2BGR);
 	vector<cv::Vec4i> defect;
 	cv::convexityDefects(largestContour, hull, defect);
 
@@ -501,6 +503,21 @@ void Application::evaluateHandLayer2()	// 7ms
 	}
 	
 	clusterPoint(semi_fingerPoint, extendedFinger, DISTANCE_THESHOLD);
+
+	if (extendedFinger.size() < 3) {
+		cv::Mat addRegionMask = cv::Mat::zeros(handLayer1.size(), CV_8UC1);
+		cv::Rect modifyRect;
+		modifyRect.x = palmRect.x;
+		modifyRect.y = 0;
+		modifyRect.height = palmRect.y;
+		modifyRect.width = palmRect.width;
+
+		cv::rectangle(addRegionMask, modifyRect, cv::Scalar(255), -1);
+		cv::imshow("add roi mask", addRegionMask);
+		cv::bitwise_or(handLayer1, handLayer2, handLayer1, addRegionMask);
+	}
+
+	cv::cvtColor(handLayer2, handLayer2, cv::COLOR_GRAY2BGR);
 	for (int i = 0; i < extendedFinger.size(); i++) {
 		cv::circle(handLayer2, extendedFinger[i], 4, cv::Scalar(0, 255, 0), 2);
 	}
@@ -897,28 +914,12 @@ void Application::evaluateHandLayerCut()
 	handLayer3.copyTo(sub);
 
 	cv::Rect modifyPalmRect = cv::Rect(cv::Point(palmRect.x, palmRect.y), cv::Size(palmRect.width + 10, palmRect.height));
+	//cv::Rect modifyPalmRect = cv::Rect(cv::Point(palmRect.x, palmPoint.y - 10), cv::Size(palmRect.width + 10, 20));
 	cv::rectangle(palmMask, modifyPalmRect, cv::Scalar(255), -1);
 	cv::bitwise_not(handLayer3, handLayer3_inverse);
 	cv::bitwise_and(handLayer3_inverse, palmMask, sub);
 
 	cv::imshow("cut sub", sub);
-
-	vector<cv::Point> contourO = findLargestContour(sub);
-	if (contourO.size() == 0)
-		return;
-	vector<int> hullO;
-	cv::convexHull(contourO, hullO);
-	vector<cv::Vec4i> convex;
-	cv::convexityDefects(contourO, hullO, convex);
-	vector<cv::Point> concave;
-	for (int i = 0; i < convex.size(); i++)
-	{
-		cv::Vec4i v = convex[i];
-		if (v[3] > CONVEX_DEPTH_THRESHOLD_LAYER_2)
-		{
-			concave.push_back(contourO[v[2]]);
-		}
-	}
 	
 	vector<vector<cv::Point>> contours;
 	vector<cv::Vec4i> hierachy;
@@ -928,11 +929,13 @@ void Application::evaluateHandLayerCut()
 	{
 		cv::convexHull(contours[i], hulls[i]);
 	}
+
 	vector<cv::Point> hullCentroids(contours.size());
 	for (int i = 0; i < hulls.size(); i++)
 	{
 		hullCentroids[i] = calCentroid(hulls[i]);
 	}
+
 	int rigthestX = 0;
 	int rigthestIndex = -1;
 	for (int i = 0; i < hullCentroids.size(); i++)
@@ -960,16 +963,15 @@ void Application::evaluateHandLayerCut()
 			endpoint_buttom = hp;
 	}
 
-	cv::Vec2d handDirection = calLinear(endpoint_top, endpoint_buttom);
+	handDirection = calLinear(endpoint_top, endpoint_buttom);
 	cv::Point ep1, ep2;
 	calEndpoint(handDirection, ep1, ep2);
-
 	double directionAngle = calLinerAngleByPoint(handDirection, palmPoint);
 	cv::Point pr = calRadiusPoint(directionAngle, handRadius, palmPoint);
 	
 	double concave_predict[] = {
 		-0.4,	// index-middle
-		0.1,		// middle-ring
+		0.1,	// middle-ring
 		0.5		// ring-little
 	};
 
@@ -981,32 +983,28 @@ void Application::evaluateHandLayerCut()
 		parallelLines[i] = calParalellLine(handDirection, predictConcaves[i]);
 	}
 
-
 	handLayer3.copyTo(handLayerCut);
 	cv::cvtColor(handLayerCut, handLayerCut, cv::COLOR_GRAY2BGR);
 	
+	cv::circle(handLayerCut, endpoint_top, 4, cv::Scalar(0, 102, 255), -1);
+	cv::circle(handLayerCut, endpoint_buttom , 4, cv::Scalar(0, 102, 255), -1);
+
 	cv::circle(handLayerCut, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
 	cv::circle(handLayerCut, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);
 	cv::circle(handLayerCut, pr, 2, cv::Scalar(0, 0, 255), -1);
 
-	if (concave.size() <= 2)
-		for (int i = 0; i < 3; i++)
-		{
-			cv::Point ppl1, ppl2;
-			calEndpoint(parallelLines[i], ppl1, ppl2);
-			cv::line(handLayerCut, ppl1, ppl2, cv::Scalar(0, 255, 0), 1);
+	for (int i = 0; i < 3; i++)
+	{
+		cv::Point ppl1, ppl2;
+		calEndpoint(parallelLines[i], ppl1, ppl2);
+		cv::line(handLayerCut, ppl1, ppl2, cv::Scalar(0, 255, 0), 1);
 
-			cv::line(handLayer1, ppl1, ppl2, cv::Scalar(0), 2);
-			cv::line(cutMask, ppl1, ppl2, cv::Scalar(0), 2);
-			cv::circle(handLayerCut, predictConcaves[i], 4, cv::Scalar(0, 102, 255), -1);
-		}
+		//cv::line(handLayer1, ppl1, ppl2, cv::Scalar(0), 2);
+		cv::line(cutMask, ppl1, ppl2, cv::Scalar(0), 2);
+		cv::circle(handLayerCut, predictConcaves[i], 4, cv::Scalar(0, 102, 255), -1);
+	}
 
 	cv::line(handLayerCut, ep1, ep2, cv::Scalar(0, 0, 255), 2);
-	
-	for (int i = 0; i < concave.size(); i++)
-	{
-		cv::circle(handLayerCut, concave[i], 4, cv::Scalar(0, 0, 255), 2);
-	}
 }
 
 void Application::evaluate3Layer()
@@ -1286,7 +1284,6 @@ cv::Vec2d Application::calLinear(cv::Point p1, cv::Point p2)
 		m = dy / dx;
 		c = p1.y - m * p1.x;
 	}
-	
 	return cv::Vec2d(m, c);
 }
 

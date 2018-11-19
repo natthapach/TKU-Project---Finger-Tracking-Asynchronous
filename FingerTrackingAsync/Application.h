@@ -4,6 +4,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #define PI 3.14159265
+#define INF HUGE_VAL
 
 class Application {
 public :
@@ -95,6 +96,7 @@ protected :
 	cv::Point handPoint;
 	int handRadius;
 
+
 	cv::Point palmPoint = cv::Point(0, 0);
 	cv::Point3f palmPoint3d;
 	vector<cv::Point> handLayer1Corners;
@@ -106,6 +108,7 @@ protected :
 	
 	cv::Rect palmRect;
 	vector<cv::Point> extendedFinger;
+	cv::Vec2d handDirection;
 
 	cv::MatND hist;
 	
