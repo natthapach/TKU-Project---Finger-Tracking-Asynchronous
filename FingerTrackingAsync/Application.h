@@ -99,35 +99,21 @@ protected :
 
 	cv::Point palmPoint = cv::Point(0, 0);
 	cv::Point3f palmPoint3d;
-	vector<cv::Point> handLayer1Corners;
 	vector<vector<cv::Point>> contoursL1;
 	map<int, vector<cv::Point>> cornerGroup;
-	vector<cv::Point> fingerL2Point;
-	vector<cv::Point> fingerPointL12;  
+	vector<cv::Point> fingerPoints;  
 
 	
 	cv::Rect palmRect;
 	vector<cv::Point> extendedFinger;
 	cv::Vec2d handDirection;
 
-	cv::MatND hist;
-	
-
-	void transformColorFrame();
-	void transformDepthFrame();
-	void buildEdgeColor();
-	void buildSkinMask();
 	void buildDepthHandMask();
-	void combineSkinHandMask();
 	void buildHand3Layers();
-	void buildHistogram();
-	void buildRawHandHistogram();
-	void buildEdgeMask();
 
 	void evaluateHandLayer1();
 	void evaluateHandLayer2();
 	void evaluateHandLayer3();
-	void evaluateHandLayerPalm();
 	void evaluateHandLayerCut();
 	void evaluate3Layer();
 
@@ -167,6 +153,8 @@ private:
 	cv::Vec2i EL3_findMaxRegion(vector<bool> acceptTransitionTable, vector<bool> acceptLengthTable);
 	cv::Point EL3_findRegionCenter(cv::Mat in, cv::Rect region);
 	int EL3_countWhitePoint(cv::Mat in, cv::Point point, int radius);
+	
+	
 	void calculateContourArea(vector<cv::Point> contour, double *area);
 	int performKeyboardEvent(int key);
 
