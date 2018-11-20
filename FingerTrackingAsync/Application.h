@@ -17,6 +17,7 @@ public :
 	const int FINGER_RING = 3;
 	const int FINGER_LITTLE = 4;
 	const int PALM_POSITION = 5;
+	const int PALM_ANGLE = 6;
 
 	void setAdapterCaller(AdapterCaller adapterCaller);
 protected :
@@ -74,7 +75,7 @@ protected :
 
 	map<int, cv::Point> finger2dMap;
 	map<int, cv::Point3f> finger3dMap; // deprecate
-	vector<cv::Point3f> finger3ds = vector<cv::Point3f>(6, cv::Point3f(0, 0, 0));
+	vector<cv::Point3f> finger3ds = vector<cv::Point3f>(7, cv::Point3f(0, 0, 0));
 
 	cv::Mat skinMask;
 	cv::Mat colorFrame;
@@ -116,6 +117,7 @@ protected :
 	void evaluateHandLayer3();
 	void evaluateHandLayerCut();
 	void evaluate3Layer();
+	void evaluatePalmAngle();
 
 	void assignFingerId();
 

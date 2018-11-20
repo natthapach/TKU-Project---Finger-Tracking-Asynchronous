@@ -80,17 +80,9 @@ int AdapterCaller::sendData(vector<cv::Point3f> points)
 	}
 
 	int recvbuflen = 512;
-
-	const char* bufferPtr[6];
-	for (int i = 0; i < 6; i++)
-	{
-		char buffer_small[50];
-		cv::Point3f point = points[i];
-		sprintf_s(buffer_small, "%d:(%.2f, %.2f, %.2f)", i, point.x, point.y, point.z);
-		bufferPtr[i] = buffer_small;
-	}
 	
 	const char *format = "{%d:(%.2f, %.2f, %.2f),"
+		"%d:(%.2f, %.2f, %.2f),"
 		"%d:(%.2f, %.2f, %.2f),"
 		"%d:(%.2f, %.2f, %.2f),"
 		"%d:(%.2f, %.2f, %.2f),"
@@ -103,7 +95,8 @@ int AdapterCaller::sendData(vector<cv::Point3f> points)
 		2, points[2].x, points[2].y, points[2].z,
 		3, points[3].x, points[3].y, points[3].z,
 		4, points[4].x, points[4].y, points[4].z,
-		5, points[5].x, points[5].y, points[5].z);
+		5, points[5].x, points[5].y, points[5].z,
+		6, points[6].x, points[6].y, points[6].z);
 	cout << buffer << endl;
 	//const char *sendbuf = "this is a test";
 	const char *sendbuf = buffer;
