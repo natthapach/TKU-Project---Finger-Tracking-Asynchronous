@@ -52,7 +52,7 @@ void Application::start()
 				}
 				prevHandMasks[0] = handMask;
 				cv::imshow("substact", t2);
-				continue;
+				//continue;
 			}
 
 			buildHand3Layers();
@@ -366,7 +366,7 @@ void Application::evaluateHandLayer3()
 	vector<int> largestHull;
 	cv::convexHull(largestContour, largestHull);
 	vector<cv::Point> concavePoints = findConcavePoints(largestContour, largestHull, 3000);
-
+	vector<cv::Point> concavePointsLow = findConcavePoints(largestContour, largestHull, 1000);
 	cv::Point minConcave;
 	if (concavePoints.size() > 0) {
 		cv::Mat hideThumbMask(handLayerPalm.size(), CV_8UC1, cv::Scalar(255));
@@ -403,7 +403,50 @@ void Application::evaluateHandLayer3()
 		palmPoint.y = center2.y;
 	}
 	cv::bitwise_or(handLayer3, handMask, handLayer3);
+	handLayer3.copyTo(handLayer3_2);
 
+
+	// ---- find middle line ----
+	cv::cvtColor(handLayer3, handLayer3, cv::COLOR_GRAY2BGR);
+	cv::Point wristPoint1 = cv::Point(640, 0);
+	for (int i = 0; i < concavePointsLow.size(); i++)
+	{
+		cv::Point ci = concavePointsLow[i];
+		if (ci.x < palmPoint.x && ci.y > wristPoint1.y)
+		{
+			wristPoint1 = ci;
+		}
+	}
+	cv::circle(handLayer3, wristPoint1, 4, cv::Scalar(0, 0, 255), -1);
+
+	double wristDist = calDistance(wristPoint1, palmPoint);
+	//cv::circle(handLayer3, palmPoint, wristDist, cv::Scalar(0, 255, 102), 2);
+
+	vector<cv::Point> semi_wrist2;
+	for (int i = 0; i < largestContour.size(); i++)
+	{
+		double d = calDistance(largestContour[i], palmPoint);
+		if (abs(d-wristDist) <= 2) {
+			semi_wrist2.push_back(largestContour[i]);
+		}
+		//cv::circle(handLayer3, largestContour[i], 2, cv::Scalar(255, 0, 0), -1);
+	}
+	cv::Point wristPoint2 = cv::Point(0, 0);
+	for (int i = 0; i < semi_wrist2.size(); i++)
+	{
+		if (semi_wrist2[i].x > palmPoint.x && semi_wrist2[i].y > wristPoint2.y)
+		{
+			wristPoint2 = semi_wrist2[i];
+		}
+		cv::circle(handLayer3, semi_wrist2[i], 2, cv::Scalar(255, 255, 0), -1);
+	}
+	cv::circle(handLayer3, wristPoint2, 4, cv::Scalar(0, 0, 255), -1);
+
+	cv::Point median_wrist = calMedianPoint(wristPoint1, wristPoint2);
+	cv::Vec2d wristPalmLine = calLinear(median_wrist, palmPoint);
+	cv::Point wep1, wep2;
+	calEndpoint(wristPalmLine, wep1, wep2);
+	cv::line(handLayer3, wep1, wep2, cv::Scalar(0, 0, 255), 2);
 }
 
 void Application::evaluateHandLayerCut()
@@ -411,12 +454,12 @@ void Application::evaluateHandLayerCut()
 	cutMask = cv::Mat(cv::Size(640, 480), CV_8UC1, cv::Scalar(255));
 	cv::Mat sub, handLayer3_inverse;
 	cv::Mat palmMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
-	handLayer3.copyTo(sub);
+	handLayer3_2.copyTo(sub);
 
 	cv::Rect modifyPalmRect = cv::Rect(cv::Point(palmRect.x, palmRect.y), cv::Size(palmRect.width + 10, palmRect.height));
 	//cv::Rect modifyPalmRect = cv::Rect(cv::Point(palmRect.x, palmPoint.y - 10), cv::Size(palmRect.width + 10, 20));
 	cv::rectangle(palmMask, modifyPalmRect, cv::Scalar(255), -1);
-	cv::bitwise_not(handLayer3, handLayer3_inverse);
+	cv::bitwise_not(handLayer3_2, handLayer3_inverse);
 	cv::bitwise_and(handLayer3_inverse, palmMask, sub);
 
 	cv::imshow("cut sub", sub);
@@ -484,7 +527,7 @@ void Application::evaluateHandLayerCut()
 		parallelLines[i] = calParalellLine(handDirection, predictConcaves[i]);
 	}
 
-	handLayer3.copyTo(handLayerCut);
+	handLayer3_2.copyTo(handLayerCut);
 	cv::cvtColor(handLayerCut, handLayerCut, cv::COLOR_GRAY2BGR);
 	
 	cv::circle(handLayerCut, endpoint_top, 4, cv::Scalar(0, 102, 255), -1);

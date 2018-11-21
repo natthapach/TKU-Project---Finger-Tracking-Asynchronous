@@ -90,6 +90,7 @@ protected :
 	cv::Mat handLayer1 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer2 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer3 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
+	cv::Mat handLayer3_2 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayerPalm = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat handLayerCut = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat handLayerAbs = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
