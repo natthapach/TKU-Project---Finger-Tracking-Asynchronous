@@ -350,6 +350,10 @@ void Application::evaluateHandLayer3()
 	vector<bool> acceptLengthTable(boundingBox.height, false);
 	EL3_buildTable(handLayer3, boundingBox, acceptTransitionTable, acceptLengthTable);
 
+	for (int i = 0; i < acceptTransitionTable.size(); i++)
+	{
+		
+	}
 	cv::Vec2i maxRegion = EL3_findMaxRegion(acceptTransitionTable, acceptLengthTable);
 	
 	palmRect = cv::Rect(cv::Point(boundingBox.x, boundingBox.y + maxRegion[0]), cv::Size(boundingBox.width, maxRegion[1] - maxRegion[0]));
