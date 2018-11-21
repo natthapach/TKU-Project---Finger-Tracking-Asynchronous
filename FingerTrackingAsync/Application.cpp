@@ -37,6 +37,24 @@ void Application::start()
 			handRadius = kinectReader.getHandRadius(HAND_RADIUS_MM);
 			
 			buildDepthHandMask();
+
+			cv::Mat substract, h_i, p_i, t1, t2;
+			cv::bitwise_xor(handMask, prevHandMasks[9], t2);
+			cv::erode(t2, t2, cv::Mat());
+			int wh = cv::countNonZero(t2);
+			cv::cvtColor(t2, t2, cv::COLOR_GRAY2BGR);
+			if (wh < 60)
+			{
+				cv::rectangle(t2, cv::Rect(cv::Point(0, 0), cv::Size(100, 100)), cv::Scalar(0, 0, 255), -1);
+				for (int i = 9; i > 0; i--)
+				{
+					prevHandMasks[i - 1].copyTo(prevHandMasks[i]);
+				}
+				prevHandMasks[0] = handMask;
+				cv::imshow("substact", t2);
+				continue;
+			}
+
 			buildHand3Layers();
 
 			evaluateHandLayer3();
@@ -48,8 +66,20 @@ void Application::start()
 
 			assignFingerId();
 
+			
+			
+			cout << "white " << wh << endl;
+
+			
+			for (int i = 2; i > 0; i--)
+			{
+				prevHandMasks[i - 1].copyTo(prevHandMasks[i]);
+			}
+			prevHandMasks[0] = handMask;
+
 			thread(&Application::sendData, this).detach();
 
+			cv::imshow("substact", t2);
 			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
 			cv::imshow(WINDOW_MASK_L2, handLayer2);
 			cv::imshow(WINDOW_MASK_L3, handLayer3);
@@ -592,7 +622,7 @@ void Application::evaluatePalmAngle()
 	double y_angle = atan(dz_y / dx);
 	
 	finger3ds[PALM_ANGLE].x = x_angle;
-	finger3ds[PALM_ANGLE].y = y_angle;
+	//finger3ds[PALM_ANGLE].y = y_angle;
 	
 	cv::circle(handLayerAbs, cv::Point(palmPoint.x, palmPoint.y - mini_r), 3, cv::Scalar(0, 0, 255), -1);
 	cv::circle(handLayerAbs, cv::Point(palmPoint.x, palmPoint.y + mini_r), 3, cv::Scalar(0, 0, 255), -1);

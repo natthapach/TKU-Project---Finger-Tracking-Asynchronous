@@ -84,6 +84,7 @@ protected :
 	cv::Mat edgeColorFrame;
 	cv::Mat edgeMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat histogramFrame;
+	vector<cv::Mat> prevHandMasks = vector<cv::Mat>(10, cv::Mat::zeros(cv::Size(640, 480), CV_8UC1));
 	cv::Mat handMask;
 	cv::Mat handLayer1Depth = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer1 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
