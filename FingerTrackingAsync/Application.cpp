@@ -580,17 +580,25 @@ void Application::evaluatePalmAngle()
 	ushort depth_x1 = rawDepthFrame.at<ushort>(palmPoint.y - mini_r, palmPoint.x);
 	ushort depth_x2 = rawDepthFrame.at<ushort>(palmPoint.y + mini_r, palmPoint.x);
 	
-	cv::Point px1 = cv::Point(depth_x1, palmPoint.y - mini_r);
-	cv::Point px2 = cv::Point(depth_x2, palmPoint.y + mini_r);
+	ushort depth_y1 = rawDepthFrame.at<ushort>(palmPoint.y, palmPoint.x - mini_r);
+	ushort depth_y2 = rawDepthFrame.at<ushort>(palmPoint.y, palmPoint.x + mini_r);
+	
+	double dz_x = depth_x2 - depth_x1;
+	double dy = 2 * mini_r;
+	double x_angle = atan(dz_x / dy);
 
-	cv::Vec2d linear_x = calLinear(px1, px2);
-	double x_angle = calLinerAngleByPoint(linear_x, palmPoint);
-	x_angle += PI;
-	if (x_angle >= 2 * PI)
-		x_angle -= 2 * PI;
+	double dz_y = depth_y2 - depth_y1;
+	double dx = 2 * mini_r;
+	double y_angle = atan(dz_y / dx);
+	
 	finger3ds[PALM_ANGLE].x = x_angle;
+	finger3ds[PALM_ANGLE].y = y_angle;
 	
-	
+	cv::circle(handLayerAbs, cv::Point(palmPoint.x, palmPoint.y - mini_r), 3, cv::Scalar(0, 0, 255), -1);
+	cv::circle(handLayerAbs, cv::Point(palmPoint.x, palmPoint.y + mini_r), 3, cv::Scalar(0, 0, 255), -1);
+
+	cv::circle(handLayerAbs, cv::Point(palmPoint.x - mini_r, palmPoint.y), 3, cv::Scalar(0, 0, 255), -1);
+	cv::circle(handLayerAbs, cv::Point(palmPoint.x + mini_r, palmPoint.y), 3, cv::Scalar(0, 0, 255), -1);
 
 }
 
