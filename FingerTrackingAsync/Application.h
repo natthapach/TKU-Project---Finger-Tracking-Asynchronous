@@ -65,6 +65,13 @@ protected :
 	const string WINDOW_MASK_L2 = "Mask Layer 2";
 	const string WINDOW_MASK_L3 = "Mask Layer 3";
 	const string WINDOW_HISTOGRAM = "Histogram";
+
+	const cv::Scalar THUMB_COLOR = cv::Scalar(0, 0, 255);
+	const cv::Scalar INDEX_COLOR = cv::Scalar(0, 102, 255);
+	const cv::Scalar MIDDLE_COLOR = cv::Scalar(255, 255, 0);
+	const cv::Scalar RING_COLOR = cv::Scalar(255, 0, 255);
+	const cv::Scalar LITTLE_COLOR = cv::Scalar(55, 175, 212);
+	const cv::Scalar PALM_COLOR = cv::Scalar(0, 255, 0);
 	
 	
 
@@ -125,6 +132,10 @@ protected :
 	void evaluatePalmAngle();
 
 	void assignFingerId();
+
+	void displayResult();
+	void displayLabel();
+
 
 	void clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh);
 	double calDistance(cv::Point p1, cv::Point p2);

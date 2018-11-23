@@ -72,13 +72,8 @@ void Application::start()
 				assignFingerId();
 			}
 
-			handMask.copyTo(handLayerAbs2);
-			cv::cvtColor(handLayerAbs2, handLayerAbs2, cv::COLOR_GRAY2BGR);
-			for (int i = 0; i < fingerPointsAbs.size(); i++)
-			{
-				cv::circle(handLayerAbs2, fingerPointsAbs[i], 4, cv::Scalar(0, 0, 255), -1);
-			}
-			
+			displayResult();
+			displayLabel();
 
 			for (int i = 2; i > 0; i--)
 			{
@@ -789,6 +784,33 @@ void Application::assignFingerId()
 		cv::Point3f p = finger3dMap[i];
 		cout << "(" << p.x << ", " << p.y << ", " << p.z << ")" << endl;
 	}
+}
+
+void Application::displayResult()
+{
+	handMask.copyTo(handLayerAbs2);
+	cv::cvtColor(handLayerAbs2, handLayerAbs2, cv::COLOR_GRAY2BGR);
+	for (int i = 0; i < fingerPointsAbs.size(); i++)
+	{
+		cv::circle(handLayerAbs2, fingerPointsAbs[i], 4, cv::Scalar(0, 0, 255), -1);
+	}
+}
+
+void Application::displayLabel()
+{
+	cv::circle(handLayerAbs2, cv::Point(480, 7), 4, THUMB_COLOR, -1);
+	cv::circle(handLayerAbs2, cv::Point(480, 22), 4, INDEX_COLOR, -1);
+	cv::circle(handLayerAbs2, cv::Point(480, 37), 4, MIDDLE_COLOR, -1);
+	cv::circle(handLayerAbs2, cv::Point(480, 52), 4, RING_COLOR, -1);
+	cv::circle(handLayerAbs2, cv::Point(480, 67), 4, LITTLE_COLOR, -1);
+	cv::circle(handLayerAbs2, cv::Point(480, 82), 4, PALM_COLOR, -1);
+
+	cv::putText(handLayerAbs2, "Thumb", cv::Point(490, 15), cv::FONT_HERSHEY_COMPLEX, 0.5, THUMB_COLOR, 2);
+	cv::putText(handLayerAbs2, "Index", cv::Point(490, 30), cv::FONT_HERSHEY_COMPLEX, 0.5, INDEX_COLOR, 2);
+	cv::putText(handLayerAbs2, "Middle", cv::Point(490, 45), cv::FONT_HERSHEY_COMPLEX, 0.5, MIDDLE_COLOR, 2);
+	cv::putText(handLayerAbs2, "Ring", cv::Point(490, 60), cv::FONT_HERSHEY_COMPLEX, 0.5, RING_COLOR, 2);
+	cv::putText(handLayerAbs2, "Little", cv::Point(490, 75), cv::FONT_HERSHEY_COMPLEX, 0.5, LITTLE_COLOR, 2);
+	cv::putText(handLayerAbs2, "Palm", cv::Point(490, 90), cv::FONT_HERSHEY_COMPLEX, 0.5, PALM_COLOR, 2);
 }
 
 void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh)
