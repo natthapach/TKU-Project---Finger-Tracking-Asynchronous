@@ -34,7 +34,7 @@ protected :
 	const double BUILD_LAYER_3_THRESHOLD = 0.9;
 
 	/* Threshold for select convexity defect on hand layer 2 */
-	const int CONVEX_DEPTH_THRESHOLD_LAYER_2 = 10000;
+	const int CONVEX_DEPTH_THRESHOLD_LAYER_2 = 9000;
 	
 	/* Threshold for select convexity defect on hand layer 3 */
 	const int CONVEX_DEPTH_THRESHOLD_LAYER_3 = 4000;
@@ -94,6 +94,7 @@ protected :
 	cv::Mat handLayerPalm = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat handLayerCut = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat handLayerAbs = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
+	cv::Mat handLayerAbs2 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat palmMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
 	cv::Mat cutMask = cv::Mat(cv::Size(640, 480), CV_8UC1, cv::Scalar(255));
 	cv::Point handPoint;
@@ -105,11 +106,13 @@ protected :
 	vector<vector<cv::Point>> contoursL1;
 	map<int, vector<cv::Point>> cornerGroup;
 	vector<cv::Point> fingerPoints;  
+	vector<cv::Point> fingerPointsAbs;
 
 	
 	cv::Rect palmRect;
 	vector<cv::Point> extendedFinger;
 	cv::Vec2d handDirection;
+	cv::Vec2d middleLine;
 
 	void buildDepthHandMask();
 	void buildHand3Layers();
@@ -142,6 +145,7 @@ protected :
 	cv::Point calRadiusPoint(double angle, double radius, cv::Point origin);
 	static double calAnglePoint(cv::Point origin, cv::Point p);
 	double calLinerAngleByPoint(cv::Vec2d l, cv::Point p);
+	double calPointLineDistance(cv::Vec2d l, cv::Point p);
 
 	vector<cv::Point> findLargestContour(cv::Mat in);
 	vector<cv::Point> findConcavePoints(vector<cv::Point> contour, vector<int> hull, int threshold);
