@@ -44,7 +44,7 @@ protected :
 	/* Threshold for cluster corners on hand layer 1 */
 	const int DISTANCE_THRESHOLD_CORNER_LAYER_1 = 3;
 	/* Threshold for ignore contours on hand layer 1 */
-	const double AREA_CONTOUR_THRESHOLD = 200;
+	const double AREA_CONTOUR_THRESHOLD = 0; // 200
 	/* Threshold for select corner pixel on hand layer 1 */
 	const int CORNER_THRESHOLD = 130;
 
@@ -83,15 +83,16 @@ protected :
 	map<int, cv::Point> finger2dMap;
 	map<int, cv::Point3f> finger3dMap; // deprecate
 	vector<cv::Point3f> finger3ds = vector<cv::Point3f>(7, cv::Point3f(0, 0, 0));
+	vector<cv::Point> finger2d = vector<cv::Point>(7, cv::Point(0, 0));
 
 	cv::Mat skinMask;
 	cv::Mat colorFrame;
 	cv::Mat depthFrame;
 	cv::Mat rawDepthFrame;
-	cv::Mat edgeColorFrame;
-	cv::Mat edgeMask = cv::Mat::zeros(cv::Size(640, 480), CV_8UC1);
-	cv::Mat histogramFrame;
+	
 	vector<cv::Mat> prevHandMasks = vector<cv::Mat>(10, cv::Mat::zeros(cv::Size(640, 480), CV_8UC1));
+	vector<cv::Mat> prevHandLayer1 = vector<cv::Mat>(10, cv::Mat::zeros(cv::Size(640, 480), CV_8UC1));
+	
 	cv::Mat handMask;
 	cv::Mat handLayer1Depth = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);
 	cv::Mat handLayer1 = cv::Mat::zeros(cv::Size(640, 480), CV_8UC3);

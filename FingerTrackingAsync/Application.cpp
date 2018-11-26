@@ -37,31 +37,29 @@ void Application::start()
 			handRadius = kinectReader.getHandRadius(HAND_RADIUS_MM);
 			
 			buildDepthHandMask();
+			buildHand3Layers();
 
 			bool skip = false;
-			cv::Mat substract, h_i, p_i, t1, t2;
-			cv::bitwise_xor(handMask, prevHandMasks[2], t2);
-			cv::erode(t2, t2, cv::Mat());
-			int wh = cv::countNonZero(t2);
-			cv::cvtColor(t2, t2, cv::COLOR_GRAY2BGR);
-			cout << "white " << wh << endl;
-			skip = wh < 50;
-			/*if (wh < 50)
+			cv::Mat substract, substract_L1;
+			cv::bitwise_xor(handMask, prevHandMasks[2], substract);
+			cv::bitwise_xor(handLayer1, prevHandLayer1[2], substract_L1);
+			cv::erode(substract, substract, cv::Mat());
+			cv::erode(substract_L1, substract_L1, cv::Mat());
+			int wh = cv::countNonZero(substract);
+ 			int wh_L1 = cv::countNonZero(substract_L1);
+			cout << "white " << wh << ", " << wh_L1 << endl;
+			skip = wh < 50 || wh_L1 < 20;
+
+			for (int i = 2; i > 0; i--)
 			{
-				cv::rectangle(t2, cv::Rect(cv::Point(0, 0), cv::Size(100, 100)), cv::Scalar(0, 0, 255), -1);
-				for (int i = 4; i > 0; i--)
-				{
-					prevHandMasks[i - 1].copyTo(prevHandMasks[i]);
-				}
-				prevHandMasks[0] = handMask;
-				cv::imshow("substact", t2);
-				continue;
-			}*/
+				prevHandMasks[i - 1].copyTo(prevHandMasks[i]);
+				prevHandLayer1[i - 1].copyTo(prevHandLayer1[i]);
+			}
+			prevHandMasks[0] = handMask;
+			prevHandLayer1[0] = handLayer1;
 
 			if (!skip)
 			{
-				buildHand3Layers();
-
 				evaluateHandLayer3();
 				evaluateHandLayerCut();
 				evaluateHandLayer2();
@@ -70,24 +68,23 @@ void Application::start()
 				evaluatePalmAngle();
 
 				assignFingerId();
+
+				cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
+				cv::imshow(WINDOW_MASK_L2, handLayer2);
+				cv::imshow(WINDOW_MASK_L3, handLayer3);
+				cv::imshow("Hand Absolute", handLayerAbs);
 			}
 
 			displayResult();
 			displayLabel();
 
-			for (int i = 2; i > 0; i--)
-			{
-				prevHandMasks[i - 1].copyTo(prevHandMasks[i]);
-			}
-			prevHandMasks[0] = handMask;
+			
 
 			thread(&Application::sendData, this).detach();
 
-			cv::imshow("substact", t2);
-			cv::imshow(WINDOW_MASK_L1, handLayer1); // 14
-			cv::imshow(WINDOW_MASK_L2, handLayer2);
-			cv::imshow(WINDOW_MASK_L3, handLayer3);
-			cv::imshow("Hand Absolute", handLayerAbs);
+			cv::imshow("substact", substract);
+			
+			
 			cv::imshow("Hand Absolute 2", handLayerAbs2);
 			//cv::imshow("Edge", edgeColorFrame);
 			cv::imshow("Palm", handLayerPalm);
@@ -105,9 +102,6 @@ void Application::start()
 			tickCount = t;
 			cout << "FPS " << fpsT << endl;
 		}
-
-		//cv::normalize(rawDepthFrame, rawDepthFrame, 0, 255, cv::NORM_MINMAX, CV_8UC1);
-		//cv::imshow(WINDOW_RGB, colorFrame);
 		cv::imshow(WINDOW_DEPTH, depthFrame);
 
 		int key = cv::waitKey(1);
@@ -640,6 +634,29 @@ void Application::evaluate3Layer()
 	{
 		cv::circle(handLayerAbs, fingerPoints[i], 4, cv::Scalar(0, 0, 255), -1);  
 	}
+
+	
+
+	double handAngle = calLinerAngleByPoint(handDirection, palmPoint);
+	double angle_low = handAngle - 0.75*PI;
+	double angle_up = handAngle + 0.75*PI;
+	cv::Point pl = calRadiusPoint(angle_low, handRadius, palmPoint);
+	cv::Point pu = calRadiusPoint(angle_up, handRadius, palmPoint);
+
+	int i = 0;
+	while (i < fingerPoints.size())
+	{
+		double p_angle = calAnglePoint(palmPoint, fingerPoints[i]);
+		if (p_angle < angle_low || p_angle > angle_up)
+		{
+			cv::circle(handLayerAbs, fingerPoints[i], 6, RING_COLOR, 2);
+			fingerPoints.erase(fingerPoints.begin() + i);
+		}
+		i++;
+	}
+
+	cv::line(handLayerAbs, palmPoint, pl, RING_COLOR, 1);
+	cv::line(handLayerAbs, palmPoint, pu, RING_COLOR, 1);
 	
 	cv::circle(handLayerAbs, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
 	cv::circle(handLayerAbs, palmPoint, handRadius, cv::Scalar(0, 102, 255), 2);
@@ -772,6 +789,7 @@ void Application::assignFingerId()
 	{
 		finger3dMap[fingerIds[i]] = fingerPoint3d[i];
 		finger3ds[fingerIds[i]] = fingerPoint3d[i];
+		finger2d[fingerIds[i]] = fingerPoint3d2[i];
 		char buffer[10];
 		sprintf_s(buffer, "%s", fingerNames[i].c_str());
 		cv::putText(handLayerAbs, buffer, cv::Point(fingerPoint3d2[i].x, fingerPoint3d2[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
@@ -782,7 +800,6 @@ void Application::assignFingerId()
 	for (int i = 0; i < 6; i++)
 	{
 		cv::Point3f p = finger3dMap[i];
-		cout << "(" << p.x << ", " << p.y << ", " << p.z << ")" << endl;
 	}
 }
 
@@ -790,10 +807,16 @@ void Application::displayResult()
 {
 	handMask.copyTo(handLayerAbs2);
 	cv::cvtColor(handLayerAbs2, handLayerAbs2, cv::COLOR_GRAY2BGR);
-	for (int i = 0; i < fingerPointsAbs.size(); i++)
+	/*for (int i = 0; i < fingerPointsAbs.size(); i++)
 	{
 		cv::circle(handLayerAbs2, fingerPointsAbs[i], 4, cv::Scalar(0, 0, 255), -1);
-	}
+	}*/
+	cv::circle(handLayerAbs2, finger2d[FINGER_THUMB], 4, THUMB_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2d[FINGER_INDEX], 4, INDEX_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2d[FINGER_MIDDLE], 4, MIDDLE_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2d[FINGER_RING], 4, RING_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2d[FINGER_LITTLE], 4, LITTLE_COLOR, -1);
+	cv::circle(handLayerAbs2, palmPoint, 4, PALM_COLOR, -1);
 }
 
 void Application::displayLabel()
