@@ -44,7 +44,7 @@ protected :
 	/* Threshold for cluster corners on hand layer 1 */
 	const int DISTANCE_THRESHOLD_CORNER_LAYER_1 = 3;
 	/* Threshold for ignore contours on hand layer 1 */
-	const double AREA_CONTOUR_THRESHOLD = 0; // 200
+	const double AREA_CONTOUR_THRESHOLD = 200; // 200
 	/* Threshold for select corner pixel on hand layer 1 */
 	const int CORNER_THRESHOLD = 130;
 
@@ -158,6 +158,7 @@ protected :
 	static double calAnglePoint(cv::Point origin, cv::Point p);
 	double calLinerAngleByPoint(cv::Vec2d l, cv::Point p);
 	double calPointLineDistance(cv::Vec2d l, cv::Point p);
+	double calAngleOf3Points(cv::Point start, cv::Point farP, cv::Point end);
 
 	vector<cv::Point> findLargestContour(cv::Mat in);
 	vector<cv::Point> findConcavePoints(vector<cv::Point> contour, vector<int> hull, int threshold);
@@ -187,6 +188,17 @@ private:
 		}
 	};
 
+	struct PointDistance {
+		cv::Point point;
+		double distance;
+		PointDistance() {};
+		PointDistance(cv::Point p, double d) : point(p), distance(d) {};
+	};
+	struct PointDistanceSorter {
+		bool operator() (PointDistance pd1, PointDistance pd2) {
+			return pd1.distance < pd2.distance;
+		}
+	};
 	struct ConvexSorter {
 		cv::Point origin;
 		bool operator() (cv::Point p1, cv::Point p2) {

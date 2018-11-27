@@ -48,7 +48,7 @@ void Application::start()
 			int wh = cv::countNonZero(substract);
  			int wh_L1 = cv::countNonZero(substract_L1);
 			cout << "white " << wh << ", " << wh_L1 << endl;
-			skip = wh < 50 || wh_L1 < 20;
+			skip = wh < 40 || wh_L1 < 20;
 
 			for (int i = 2; i > 0; i--)
 			{
@@ -239,6 +239,30 @@ void Application::evaluateHandLayer1() // ~66ms
 	// group corner by contours
 	vector<cv::Vec4i> hierachy;
 	cv::findContours(handLayer1, contoursL1, hierachy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+	vector<vector<cv::Point>> hulls(contoursL1.size());
+	for (int i = 0; i < contoursL1.size(); i++)
+	{
+		cv::convexHull(contoursL1[i], hulls[i]);
+	}
+
+	// vertex of contour
+	vector<vector<cv::Point>> vertexes(hulls.size(), vector<cv::Point>());
+	for (int i = 0; i < hulls.size(); i++)
+	{
+		for (int j = 0; j < hulls[i].size(); j++)
+		{
+			cv::Point start = hulls[i][(j - 1) % hulls[i].size()];
+			cv::Point farP = hulls[i][j];
+			cv::Point end = hulls[i][(j + 1) % hulls[i].size()];
+			
+			double angle = calAngleOf3Points(start, farP, end);
+			if (angle < 0.5*PI)
+			{
+				vertexes[i].push_back(farP);
+			}
+		}
+		
+	}
 
 	// find all centroid
 	vector<cv::Moments> mu(contoursL1.size());
@@ -297,6 +321,15 @@ void Application::evaluateHandLayer1() // ~66ms
 	}*/
 
 	cv::circle(handLayer1, palmPoint, 4, cv::Scalar(0, 102, 255), -1);
+	
+	for (int i = 0; i < vertexes.size(); i++)
+	{
+		for (int j = 0; j < vertexes[i].size(); j++)
+		{
+			cv::circle(handLayer1, vertexes[i][j], 2, cv::Scalar(0, 255, 0), -1);
+			//cornerGroup[i].push_back(vertexes[i][j]);
+		}
+	}
 }
 
 void Application::evaluateHandLayer2()	// 7ms
@@ -423,14 +456,35 @@ void Application::evaluateHandLayer3()
 	//cv::circle(handLayer3, palmPoint, wristDist, cv::Scalar(0, 255, 102), 2);
 
 	vector<cv::Point> semi_wrist2;
+	vector<cv::Point> semi_arm;
 	for (int i = 0; i < largestContour.size(); i++)
 	{
 		double d = calDistance(largestContour[i], palmPoint);
 		if (abs(d-wristDist) <= 2 ) {
 			semi_wrist2.push_back(largestContour[i]);
 		}
+		if (abs(d - 2 * handRadius) <= 2) {
+			semi_arm.push_back(largestContour[i]);
+			
+		}
 		//cv::circle(handLayer3, largestContour[i], 2, cv::Scalar(255, 0, 0), -1);
 	}
+	// find arm point
+	vector<cv::Point> semi_arm_cluster;
+	clusterPoint(semi_arm, semi_arm_cluster, 5);
+	cv::Point arm1 = cv::Point(0, 0), arm2 = cv::Point(0, 0);
+	for (int i = 0; i < semi_arm_cluster.size(); i++)
+	{
+		cv::Point semi = semi_arm_cluster[i];
+		if (semi.y > arm1.y)
+		{
+			
+		}
+		cv::circle(handLayer3, semi_arm_cluster[i], 2, cv::Scalar(255, 0, 0), -1);
+	}
+	
+
+
 	cv::Point wristPoint2 = cv::Point(0, 0);
 	for (int i = 0; i < semi_wrist2.size(); i++)
 	{
@@ -450,7 +504,10 @@ void Application::evaluateHandLayer3()
 	cv::line(handLayerAbs, wep1, wep2, cv::Scalar(0, 255, 0), 2);
 	cv::circle(handLayerAbs, wristPoint1, 4, cv::Scalar(255, 255, 0), -1);
 	cv::circle(handLayerAbs, wristPoint2, 4, cv::Scalar(255, 255, 0), -1);
+	cv::circle(handLayerAbs, palmPoint, 2*handRadius, cv::Scalar(255, 255, 0), 2);
 	middleLine = wristPalmLine;
+
+	
 }
 
 void Application::evaluateHandLayerCut()
@@ -562,7 +619,14 @@ void Application::evaluate3Layer()
 
 	// merge extended finger to corner group
 	vector<bool> fingerL2Used(extendedFinger.size(), false);
-
+	vector<int> countMerge(contoursL1.size(), 0);
+	vector<cv::Scalar> colors = {
+		cv::Scalar(0, 0, 255),
+		cv::Scalar(255, 0, 0),
+		cv::Scalar(0, 255, 0),
+		cv::Scalar(0, 102, 255),
+		cv::Scalar(255, 0, 255)
+	};
 	for (map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++)
 	{
 		vector<cv::Point> corners = it->second;
@@ -573,10 +637,11 @@ void Application::evaluate3Layer()
 			double d = cv::pointPolygonTest(contour, finger, true);
 			if (d > MIN_DIST_12) {
 				corners.push_back(finger);
-				cv::circle(handLayer2, finger, 4, cv::Scalar(0, 0, 255), 2);
-				cv::drawContours(handLayer2, vector<vector<cv::Point>>{ contour }, 0, cv::Scalar(0, 0, 255), 2);
+				cv::circle(handLayer2, finger, 4, colors[it->first%5], 2);
+				cv::drawContours(handLayer2, vector<vector<cv::Point>>{ contour }, 0, colors[it->first % 5], 2);
 				fingerL2Used[i] = true;
-				break;
+				countMerge[it->first] += 1;
+				//break;
 			}
 		}
 	}
@@ -588,40 +653,47 @@ void Application::evaluate3Layer()
 		}
 	}
 
+	double handAngle = calLinerAngleByPoint(handDirection, palmPoint);
+	double angle_low = handAngle - 0.75*PI + 0.1;
+	double angle_up = handAngle + 0.75*PI;
+
 	vector<cv::Point> selectedCorners;
 	for(map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++)
 	{
 		vector<cv::Point> corners = it->second;
-		double farthestDist = 0;
-		double nearthestDist = 10000000;
-		int farthestIndex = -1;
-		int nearthestIndex = -1;
+		int mergedFinger = countMerge[it->first];
+		int select_amt = 0;
+		if (mergedFinger < 2)
+			select_amt = 1;
+		else
+			select_amt = mergedFinger;
 		bool extendPalm = false;
+
+		vector<PointDistance> distances(corners.size());
 		for (int i = 0; i < corners.size(); i++)
 		{
-			double d = calDistance(corners[i], palmPoint);
-			
-			if (d > farthestDist)
-			{
-				farthestDist = d;
-				farthestIndex = i;
-			}
-			if (d < nearthestDist) {
-				nearthestDist = d;
-				nearthestIndex = i;
-			}
-
+			double d = calDistance(palmPoint, corners[i]);
+			distances[i].point = corners[i];
+			distances[i].distance = d;
 			if (d > 1.4*handRadius)
 				extendPalm = true;
 		}
+		PointDistanceSorter sorter;
+		sort(distances.begin(), distances.end(), sorter);
 
-		if (extendPalm) {
-			if (farthestIndex != -1)
-				selectedCorners.push_back(corners[farthestIndex]);
+		if (extendPalm)
+		{
+			// use farthest
+			for (int i = 0; i < distances.size() && i < select_amt; i++)
+			{
+				selectedCorners.push_back(distances[distances.size() - i - 1].point);
+			}
 		}
 		else {
-			if (nearthestIndex != -1)
-				selectedCorners.push_back(corners[nearthestIndex]);
+			for (int i = 0; i < distances.size() && i < select_amt; i++)
+			{
+				selectedCorners.push_back(distances[i].point);
+			}
 		}
 	}
 
@@ -637,23 +709,9 @@ void Application::evaluate3Layer()
 
 	
 
-	double handAngle = calLinerAngleByPoint(handDirection, palmPoint);
-	double angle_low = handAngle - 0.75*PI;
-	double angle_up = handAngle + 0.75*PI;
+	
 	cv::Point pl = calRadiusPoint(angle_low, handRadius, palmPoint);
 	cv::Point pu = calRadiusPoint(angle_up, handRadius, palmPoint);
-
-	int i = 0;
-	while (i < fingerPoints.size())
-	{
-		double p_angle = calAnglePoint(palmPoint, fingerPoints[i]);
-		if (p_angle < angle_low || p_angle > angle_up)
-		{
-			cv::circle(handLayerAbs, fingerPoints[i], 6, RING_COLOR, 2);
-			fingerPoints.erase(fingerPoints.begin() + i);
-		}
-		i++;
-	}
 
 	cv::line(handLayerAbs, palmPoint, pl, RING_COLOR, 1);
 	cv::line(handLayerAbs, palmPoint, pu, RING_COLOR, 1);
@@ -784,7 +842,7 @@ void Application::assignFingerId()
 	palmPoint3d = convertPoint2dTo3D(palmPoint);
 	char buffer[100];
 	sprintf_s(buffer, "(%.2f, %.2f, %.2f)", palmPoint3d.x, palmPoint3d.y, palmPoint3d.z);
-	cv::putText(handLayerAbs, buffer, cv::Point(palmPoint.x, palmPoint.y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
+	//cv::putText(handLayerAbs, buffer, cv::Point(palmPoint.x, palmPoint.y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
 	for (int i = 0; i < fingerPoint3d.size() && i < 5; i++)
 	{
 		finger3dMap[fingerIds[i]] = fingerPoint3d[i];
@@ -792,7 +850,7 @@ void Application::assignFingerId()
 		finger2d[fingerIds[i]] = fingerPoint3d2[i];
 		char buffer[10];
 		sprintf_s(buffer, "%s", fingerNames[i].c_str());
-		cv::putText(handLayerAbs, buffer, cv::Point(fingerPoint3d2[i].x, fingerPoint3d2[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
+		//cv::putText(handLayerAbs, buffer, cv::Point(fingerPoint3d2[i].x, fingerPoint3d2[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
 	}
 	finger3dMap[PALM_POSITION] = palmPoint3d;
 	finger3ds[PALM_POSITION] = palmPoint3d;
@@ -834,6 +892,9 @@ void Application::displayLabel()
 	cv::putText(handLayerAbs2, "Ring", cv::Point(490, 60), cv::FONT_HERSHEY_COMPLEX, 0.5, RING_COLOR, 2);
 	cv::putText(handLayerAbs2, "Little", cv::Point(490, 75), cv::FONT_HERSHEY_COMPLEX, 0.5, LITTLE_COLOR, 2);
 	cv::putText(handLayerAbs2, "Palm", cv::Point(490, 90), cv::FONT_HERSHEY_COMPLEX, 0.5, PALM_COLOR, 2);
+
+	cv::circle(handLayerAbs2, palmPoint, handRadius, cv::Scalar(0, 255, 0), 2);
+	cv::circle(handLayerAbs2, palmPoint, 1.7*handRadius, cv::Scalar(0, 255, 0), 2);
 }
 
 void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh)
@@ -1228,6 +1289,16 @@ double Application::calPointLineDistance(cv::Vec2d l, cv::Point p)
 	double C = l[1];
 	double d = abs(A*p.x + B * p.y + C) / sqrt(pow(A, 2) + pow(B, 2));
 	return d;
+}
+
+double Application::calAngleOf3Points(cv::Point start, cv::Point farP, cv::Point end)
+{
+	double d_sf = calDistance(start, farP);
+	double d_se = calDistance(start, end);
+	double d_ef = calDistance(farP, end);
+
+	double angle = acos((pow(d_sf, 2) + pow(d_ef, 2) - pow(d_se, 2)) / (2 * d_sf * d_ef));
+	return 0.0;
 }
 
 vector<cv::Point> Application::findLargestContour(cv::Mat in)
