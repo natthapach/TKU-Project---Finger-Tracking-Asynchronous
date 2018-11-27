@@ -157,7 +157,7 @@ protected :
 	cv::Point calRadiusPoint(double angle, double radius, cv::Point origin);
 	static double calAnglePoint(cv::Point origin, cv::Point p);
 	double calLinerAngleByPoint(cv::Vec2d l, cv::Point p);
-	double calPointLineDistance(cv::Vec2d l, cv::Point p);
+	static double calPointLineDistance(cv::Vec2d l, cv::Point p);
 	double calAngleOf3Points(cv::Point start, cv::Point farP, cv::Point end);
 
 	vector<cv::Point> findLargestContour(cv::Mat in);
@@ -188,6 +188,15 @@ private:
 		}
 	};
 
+	struct FingerSorterBySideHand {
+		cv::Vec2d handDirection;
+		bool operator() (cv::Point p1, cv::Point p2) {
+			double d1 = calPointLineDistance(handDirection, p1);
+			double d2 = calPointLineDistance(handDirection, p2);
+			return d1 > d2;
+		}
+	};
+
 	struct PointDistance {
 		cv::Point point;
 		double distance;
@@ -196,7 +205,7 @@ private:
 	};
 	struct PointDistanceSorter {
 		bool operator() (PointDistance pd1, PointDistance pd2) {
-			return pd1.distance < pd2.distance;
+			return pd1.distance > pd2.distance;
 		}
 	};
 	struct ConvexSorter {
