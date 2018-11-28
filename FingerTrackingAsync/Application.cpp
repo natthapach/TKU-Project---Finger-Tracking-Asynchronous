@@ -869,7 +869,7 @@ void Application::assignFingerId()
 	{
 		cv::Point pi = fingerPoints[i];
 		double di = calPointLineDistance(handDirection, pi);
-		if (di >= 2.5*handRadius && thumb_idx == -1)
+		if (di >= 2.4*handRadius && thumb_idx == -1)
 		{
 			thumb_idx = i;
 			
@@ -917,12 +917,14 @@ void Application::displayResult()
 	{
 		cv::circle(handLayerAbs2, fingerPointsAbs[i], 4, cv::Scalar(0, 0, 255), -1);
 	}*/
-	cv::circle(handLayerAbs2, finger2ds[FINGER_THUMB], 4, THUMB_COLOR, -1);
-	cv::circle(handLayerAbs2, finger2ds[FINGER_INDEX], 4, INDEX_COLOR, -1);
-	cv::circle(handLayerAbs2, finger2ds[FINGER_MIDDLE], 4, MIDDLE_COLOR, -1);
-	cv::circle(handLayerAbs2, finger2ds[FINGER_RING], 4, RING_COLOR, -1);
-	cv::circle(handLayerAbs2, finger2ds[FINGER_LITTLE], 4, LITTLE_COLOR, -1);
-	cv::circle(handLayerAbs2, palmPoint, 4, PALM_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_THUMB], 4, THUMB_COLOR, 2);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_INDEX], 4, INDEX_COLOR, 2);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_MIDDLE], 4, MIDDLE_COLOR, 2);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_RING], 4, RING_COLOR, 2);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_LITTLE], 4, LITTLE_COLOR, 2);
+	cv::circle(handLayerAbs2, palmPoint, 4, PALM_COLOR, 2);
+
+	cv::circle(handLayerAbs2, palmPoint, handRadius, cv::Scalar(0, 255, 0), 2);
 }
 
 void Application::displayLabel()
@@ -940,9 +942,6 @@ void Application::displayLabel()
 	cv::putText(handLayerAbs2, "Ring", cv::Point(490, 60), cv::FONT_HERSHEY_COMPLEX, 0.5, RING_COLOR, 2);
 	cv::putText(handLayerAbs2, "Little", cv::Point(490, 75), cv::FONT_HERSHEY_COMPLEX, 0.5, LITTLE_COLOR, 2);
 	cv::putText(handLayerAbs2, "Palm", cv::Point(490, 90), cv::FONT_HERSHEY_COMPLEX, 0.5, PALM_COLOR, 2);
-
-	cv::circle(handLayerAbs2, palmPoint, handRadius, cv::Scalar(0, 255, 0), 2);
-	cv::circle(handLayerAbs2, palmPoint, 1.7*handRadius, cv::Scalar(0, 255, 0), 2);
 }
 
 void Application::clusterPoint(vector<cv::Point>& inputArray, vector<cv::Point>& outputArray, int thresh)
