@@ -44,12 +44,12 @@ protected :
 	/* Threshold for cluster corners on hand layer 1 */
 	const int DISTANCE_THRESHOLD_CORNER_LAYER_1 = 3;
 	/* Threshold for ignore contours on hand layer 1 */
-	const double AREA_CONTOUR_THRESHOLD = 200; // 200
+	const double AREA_CONTOUR_THRESHOLD = 100; // 200
 	/* Threshold for select corner pixel on hand layer 1 */
 	const int CORNER_THRESHOLD = 130;
 
 	/* Minimum distance for merge finger layer 2 to contour layer 1 */
-	const int MIN_DIST_12 = -4;
+	const int MIN_DIST_12 = -10;
 
 	const int HAND_RADIUS_MM = 50;
 
@@ -83,7 +83,7 @@ protected :
 	map<int, cv::Point> finger2dMap;
 	map<int, cv::Point3f> finger3dMap; // deprecate
 	vector<cv::Point3f> finger3ds = vector<cv::Point3f>(7, cv::Point3f(0, 0, 0));
-	vector<cv::Point> finger2d = vector<cv::Point>(7, cv::Point(0, 0));
+	vector<cv::Point> finger2ds = vector<cv::Point>(7, cv::Point(0, 0));
 
 	cv::Mat skinMask;
 	cv::Mat colorFrame;

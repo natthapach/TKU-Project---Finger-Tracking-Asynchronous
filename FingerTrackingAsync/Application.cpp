@@ -634,6 +634,7 @@ void Application::evaluate3Layer()
 	// merge extended finger to corner group
 	vector<bool> fingerL2Used(extendedFinger.size(), false);
 	vector<int> countMerge(contoursL1.size(), 0);
+	map<int, vector<cv::Point>> mergedFingerMap;
 	vector<cv::Scalar> colors = {
 		cv::Scalar(0, 0, 255),
 		cv::Scalar(255, 0, 0),
@@ -645,6 +646,7 @@ void Application::evaluate3Layer()
 	{
 		vector<cv::Point> corners = it->second;
 		vector<cv::Point> contour = contoursL1[it->first];
+		bool merge_flag = false;
 		for (int i = 0; i < extendedFinger.size(); i++)
 		{
 			cv::Point finger = extendedFinger[i];
@@ -655,11 +657,22 @@ void Application::evaluate3Layer()
 				cv::drawContours(handLayer2, vector<vector<cv::Point>>{ contour }, 0, colors[it->first % 5], 2);
 				fingerL2Used[i] = true;
 				countMerge[it->first] += 1;
-				//break;
+				merge_flag = true;
+				
+				if (mergedFingerMap.count(it->first) == 0)
+				{
+					mergedFingerMap[it->first] = vector<cv::Point>();
+				}
+				mergedFingerMap[it->first].push_back(finger);
 			}
+		}
+		if (merge_flag)
+		{
+			clusterPoint(corners, corners, DISTANCE_THESHOLD);
 		}
 	}
 
+	// collect unmerge extend finger
 	for (int i = 0; i < fingerL2Used.size(); i++)
 	{
 		if (!fingerL2Used[i]) {
@@ -667,6 +680,8 @@ void Application::evaluate3Layer()
 		}
 	}
 
+
+	// select corner
 	double handAngle = calLinerAngleByPoint(handDirection, palmPoint);
 	double angle_low = handAngle - 0.75*PI + 0.1;
 	double angle_up = handAngle + 0.75*PI;
@@ -674,6 +689,7 @@ void Application::evaluate3Layer()
 	vector<cv::Point> selectedCorners;
 	for(map<int, vector<cv::Point>>::iterator it = cornerGroup.begin(); it != cornerGroup.end(); it++)
 	{
+		// checking amount of corner to select
 		vector<cv::Point> corners = it->second;
 		int mergedFinger = countMerge[it->first];
 		int select_amt = 0;
@@ -681,11 +697,14 @@ void Application::evaluate3Layer()
 			select_amt = 1;
 		else
 			select_amt = mergedFinger;
+
 		bool extendPalm = false;
 
+		// making distance list
 		vector<PointDistance> distances(corners.size());
 		for (int i = 0; i < corners.size(); i++)
 		{
+			// filter out point in lower palm
 			double angle = calAnglePoint(palmPoint, corners[i]);
 			if (angle < angle_low || angle > angle_up)
 				continue;
@@ -698,8 +717,12 @@ void Application::evaluate3Layer()
 
 			cv::circle(handLayer2, corners[i], 1, cv::Scalar(0, 102, 255), -1);
 		}
+
+		// sort by distance
 		PointDistanceSorter sorter;
 		sort(distances.begin(), distances.end(), sorter);
+
+		// filter out near point
 		int i = 0;
 		while (i < distances.size() - 1) {
 			cv::Point pi = distances[i].point;
@@ -725,9 +748,18 @@ void Application::evaluate3Layer()
 		if (extendPalm)
 		{
 			// use farthest
-			for (int i = 0; i < distances.size() && i < select_amt; i++)
+			if (mergedFinger > 0)
 			{
-				selectedCorners.push_back(distances[i].point);
+				for (int i = 0; i < mergedFingerMap[it->first].size(); i++)
+				{
+					selectedCorners.push_back(mergedFingerMap[it->first][i]);
+				}
+			}
+			else {
+				for (int i = 0; i < distances.size() && i < select_amt; i++)
+				{
+					selectedCorners.push_back(distances[i].point);
+				}
 			}
 		}
 		else {
@@ -741,6 +773,33 @@ void Application::evaluate3Layer()
 	for (int i = 0; i < selectedCorners.size(); i++)
 	{
 		fingerPoints.push_back(selectedCorners[i]);
+	}
+
+	// filter out near finger point (redundant point from other contour group)
+	int i = 0;
+	while (i < (fingerPoints.size()-1) && fingerPoints.size() != 0) {
+		cv::Point pi = fingerPoints[i];
+		cv::Point pj = fingerPoints[i+1];
+		double ai = calAnglePoint(palmPoint, pi);
+		double aj = calAnglePoint(palmPoint, pj);
+		double dij = calDistance(pi, pj);
+
+		if (abs(ai-aj) < ASSIGN_FINGER_ANGLE_THRESHOLD && dij < DISTANCE_THESHOLD)
+		{
+			double di = calDistance(palmPoint, pi);
+			double dj = calDistance(palmPoint, pj);
+			if (di > dj)
+			{
+				fingerPoints.erase(fingerPoints.begin() + i + 1);
+				i += 2;
+				continue;
+			}
+			else {
+				fingerPoints.erase(fingerPoints.begin() + i);
+				continue;
+			}
+		}
+		i++;
 	}
 
 	for (int i = 0; i < fingerPoints.size(); i++)
@@ -800,114 +859,53 @@ void Application::evaluatePalmAngle()
 
 void Application::assignFingerId()
 {
-	cv::Mat candidate;
-	handMask.copyTo(candidate);
-	cv::cvtColor(candidate, candidate, cv::COLOR_GRAY2BGR);
-	fingerPointsAbs.clear();
-
-	vector<cv::Point2d> fingerPointsPolar(fingerPoints.size());
-	vector<cv::Point3f> fingerPoint3d;
-	vector<cv::Point> fingerPoint3d2;	// position to draw
-	FingerSorter fingerSorter;
-	fingerSorter.origin = palmPoint;
-	FingerSorterBySideHand fingerSorterBySideHand;
-	fingerSorterBySideHand.handDirection = handDirection;
-
-	sort(fingerPoints.begin(), fingerPoints.end(), fingerSorterBySideHand);
-
-	// ignore redundant point from another contour
-	int i = 0;
-	while (i < fingerPoints.size()) {
-		cv::Point pi = fingerPoints[i];
-		cv::Point pj = fingerPoints[(i + 1) % fingerPoints.size()];
-		double ai = calAnglePoint(palmPoint, pi);
-		double aj = calAnglePoint(palmPoint, pj);
-		double dij = calDistance(pi, pj);
-
-		cv::Point3f p3d;
-		cv::Point p3d2;
-		double di = calDistance(palmPoint, pi);
-		double dj = calDistance(palmPoint, pj);
-		if (abs(ai - aj) < ASSIGN_FINGER_ANGLE_THRESHOLD && dij < DISTANCE_THESHOLD) {
-			if (di > dj) {
-				p3d = convertPoint2dTo3D(pi);
-				p3d2 = pi;
-			}
-			else {
-				p3d = convertPoint2dTo3D(pj);
-				p3d2 = pj;
-			}
-			i += 2;
-		}
-		else {
-			p3d = convertPoint2dTo3D(pi);
-			p3d2 = pi;
-			i += 1;
-		}
-
-		fingerPoint3d.push_back(p3d);
-		fingerPoint3d2.push_back(p3d2);
-		fingerPointsAbs.push_back(p3d2);
-
-		// define thumb
-		double dpl = calPointLineDistance(handDirection, pi);
-		if (dpl >= 2.5*handRadius)
-		{
-			cv::circle(handLayerAbs, pi, 6, cv::Scalar(128, 128, 128), 2);
-		}
-		cv::circle(candidate, pi, 4, cv::Scalar(0, 0, 255), -1);
-	}
-
-	cv::imshow("candidate", candidate);
-
-	double minMiddleDist = 640;
-	cv::Point middleFinger;
-	for (int i = 0; i < fingerPoint3d2.size(); i++)
-	{
-		double d = calPointLineDistance(middleLine, fingerPoint3d2[i]);  
-		if (d < minMiddleDist)
-		{
-			minMiddleDist = d;
-			middleFinger = fingerPoint3d2[i];
-
-		}
-	}
-	cv::circle(handLayerAbs, middleFinger, 6, cv::Scalar(0, 255, 0), 2);
-
-	string fingerNames[] = {
-		"Thumb", "Index", "Middle", "Ring", "Little"
-	};
-	int fingerIds[] = {
-		FINGER_THUMB, FINGER_INDEX, FINGER_MIDDLE, FINGER_RING, FINGER_LITTLE
-	};
-
-	for (int i = 0; i < fingerPoint3d.size(); i++)
-	{
-		cv::Point3f p = fingerPoint3d[i];
-	}
+	FingerSorterBySideHand fingerSorter;
+	fingerSorter.handDirection = handDirection;
+	sort(fingerPoints.begin(), fingerPoints.end(), fingerSorter);
+	int thumb_idx = -1;
+	vector<int> inside_idx;
 	
-	if (palmPoint.x == 0 || palmPoint.y == 0)
-		return;
-
-	palmPoint3d = convertPoint2dTo3D(palmPoint);
-	char buffer[100];
-	sprintf_s(buffer, "(%.2f, %.2f, %.2f)", palmPoint3d.x, palmPoint3d.y, palmPoint3d.z);
-	//cv::putText(handLayerAbs, buffer, cv::Point(palmPoint.x, palmPoint.y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
-	for (int i = 0; i < fingerPoint3d.size() && i < 5; i++)
+	for (int i = 0; i < fingerPoints.size(); i++)
 	{
-		finger3dMap[fingerIds[i]] = fingerPoint3d[i];
-		finger3ds[fingerIds[i]] = fingerPoint3d[i];
-		finger2d[fingerIds[i]] = fingerPoint3d2[i];
-		char buffer[10];
-		sprintf_s(buffer, "%s", fingerNames[i].c_str());
-		//cv::putText(handLayerAbs, buffer, cv::Point(fingerPoint3d2[i].x, fingerPoint3d2[i].y + 10), cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 102, 255), 1);
+		cv::Point pi = fingerPoints[i];
+		double di = calPointLineDistance(handDirection, pi);
+		if (di >= 2.5*handRadius && thumb_idx == -1)
+		{
+			thumb_idx = i;
+			
+		}
+		double dpi = calDistance(palmPoint, pi);
+		if (dpi < handRadius)
+		{
+			inside_idx.push_back(i);
+			cv::circle(handLayerAbs, pi, 6, cv::Scalar(255, 255, 0), 2);
+		}
 	}
-	finger3dMap[PALM_POSITION] = palmPoint3d;
-	finger3ds[PALM_POSITION] = palmPoint3d;
+
+	if (thumb_idx == -1 && inside_idx.size() != 0)
+	{
+		thumb_idx = inside_idx[0];
+	}
+	if (thumb_idx != -1)
+	{
+		cv::circle(handLayerAbs, fingerPoints[thumb_idx], 6, cv::Scalar(128, 128, 128), 2);
+		finger2ds[0] = fingerPoints[thumb_idx];
+	}
+
+	int finger_idx = 1;
+	for (int i = 0; i < fingerPoints.size() && finger_idx < 5; i++)
+	{
+		if (i != thumb_idx)
+		{
+			finger2ds[finger_idx] = fingerPoints[i];
+			finger_idx++;
+		}
+	}
+	finger2ds[5] = palmPoint;
 
 	for (int i = 0; i < 6; i++)
 	{
-		cv::Point3f p = finger3dMap[i];
+		finger3ds[i] = convertPoint2dTo3D(finger2ds[i]);
 	}
 }
 
@@ -919,11 +917,11 @@ void Application::displayResult()
 	{
 		cv::circle(handLayerAbs2, fingerPointsAbs[i], 4, cv::Scalar(0, 0, 255), -1);
 	}*/
-	cv::circle(handLayerAbs2, finger2d[FINGER_THUMB], 4, THUMB_COLOR, -1);
-	cv::circle(handLayerAbs2, finger2d[FINGER_INDEX], 4, INDEX_COLOR, -1);
-	cv::circle(handLayerAbs2, finger2d[FINGER_MIDDLE], 4, MIDDLE_COLOR, -1);
-	cv::circle(handLayerAbs2, finger2d[FINGER_RING], 4, RING_COLOR, -1);
-	cv::circle(handLayerAbs2, finger2d[FINGER_LITTLE], 4, LITTLE_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_THUMB], 4, THUMB_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_INDEX], 4, INDEX_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_MIDDLE], 4, MIDDLE_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_RING], 4, RING_COLOR, -1);
+	cv::circle(handLayerAbs2, finger2ds[FINGER_LITTLE], 4, LITTLE_COLOR, -1);
 	cv::circle(handLayerAbs2, palmPoint, 4, PALM_COLOR, -1);
 }
 
