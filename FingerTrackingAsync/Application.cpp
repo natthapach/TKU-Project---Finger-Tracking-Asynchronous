@@ -48,7 +48,7 @@ void Application::start()
 			int wh = cv::countNonZero(substract);
  			int wh_L1 = cv::countNonZero(substract_L1);
 			cout << "white " << wh << ", " << wh_L1 << endl;
-			skip = wh < 40 || wh_L1 < 20;
+			skip = wh < 30 || wh_L1 < 15;
 
 			for (int i = 2; i > 0; i--)
 			{
@@ -131,6 +131,7 @@ void Application::buildDepthHandMask()
 			handMask.at<uchar>(y, x) = 128;
 		}
 	}
+	cv::circle(handMask, cv::Point(handPosX, handPosY), 4 * handRadius, cv::Scalar(0), 2);
 	cv::floodFill(handMask, cv::Point((int)handPosX, (int)handPosY), cv::Scalar(255));
 	cv::threshold(handMask, handMask, 129, 255, cv::THRESH_BINARY);
 }
