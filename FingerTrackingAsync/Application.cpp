@@ -48,7 +48,7 @@ void Application::start()
 			int wh = cv::countNonZero(substract);
  			int wh_L1 = cv::countNonZero(substract_L1);
 			cout << "white " << wh << ", " << wh_L1 << endl;
-			skip = wh < 30 || wh_L1 < 15;
+			skip = (wh < TRACK_FIXED_THRESH_HAND_MASK) || (wh_L1 < TRACK_FIXED_THRESH_HAND_LAYER_1);
 
 			for (int i = 2; i > 0; i--)
 			{

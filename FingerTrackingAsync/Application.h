@@ -26,6 +26,9 @@ protected :
 	ushort maxDepth = 65535;
 	ushort minDepth = 0;
 
+	const int TRACK_FIXED_THRESH_HAND_MASK = 30;
+	const int TRACK_FIXED_THRESH_HAND_LAYER_1 = 15;
+
 	/* Percentage threshold for build hand layer 1 */
 	const double BUILD_LAYER_1_THRESHOLD = 0.2;
 	/* Percentage threshold for build hand layer 2 */
