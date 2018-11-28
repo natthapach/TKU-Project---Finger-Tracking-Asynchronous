@@ -40,15 +40,14 @@ void Application::start()
 			buildHand3Layers();
 
 			bool skip = false;
-			cv::Mat substract, substract_L1;
+			cv::Mat substract;
 			cv::bitwise_xor(handMask, prevHandMasks[2], substract);
-			cv::bitwise_xor(handLayer1, prevHandLayer1[2], substract_L1);
 			cv::erode(substract, substract, cv::Mat());
-			cv::erode(substract_L1, substract_L1, cv::Mat());
 			int wh = cv::countNonZero(substract);
- 			int wh_L1 = cv::countNonZero(substract_L1);
-			cout << "white " << wh << ", " << wh_L1 << endl;
-			skip = (wh < TRACK_FIXED_THRESH_HAND_MASK) || (wh_L1 < TRACK_FIXED_THRESH_HAND_LAYER_1);
+			int handDepth = kinectReader.getHandDepth();
+			double indicateValue = TRACK_FRACTOR_HAND_MASK * ((1.0*wh) / handDepth);
+			cout << "white " << wh << ":" << handDepth << " " << indicateValue << endl;
+			skip = indicateValue > TRACK_THRESH_HAND_MASK;
 
 			for (int i = 2; i > 0; i--)
 			{

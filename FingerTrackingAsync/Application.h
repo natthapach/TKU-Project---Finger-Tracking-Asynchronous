@@ -28,6 +28,8 @@ protected :
 
 	const int TRACK_FIXED_THRESH_HAND_MASK = 30;
 	const int TRACK_FIXED_THRESH_HAND_LAYER_1 = 15;
+	const int TRACK_FRACTOR_HAND_MASK = 1.0;
+	const int TRACK_THRESH_HAND_MASK = 0;
 
 	/* Percentage threshold for build hand layer 1 */
 	const double BUILD_LAYER_1_THRESHOLD = 0.2;
